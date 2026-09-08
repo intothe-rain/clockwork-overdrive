@@ -1,5 +1,12 @@
 [
   {
+    "name": "RERERE",
+    "score": 472673,
+    "combo": 140,
+    "bpm": 148,
+    "date": "2026-09-08"
+  },
+  {
     "name": "CWP",
     "score": 385511,
     "combo": 128,
@@ -60,13 +67,6 @@
     "score": 129381,
     "combo": 53,
     "bpm": 148,
-    "date": "2026-09-08"
-  },
-  {
-    "name": "RERERE",
-    "score": 129226,
-    "combo": 74,
-    "bpm": 142,
     "date": "2026-09-08"
   }
 ]
