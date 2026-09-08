@@ -1,0 +1,1781 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>클락워크 오버드라이브 (Clockwork Overdrive)</title>
+  
+  <!-- 메타 태그 및 Open Graph (웹 배포 최적화) -->
+  <meta name="description" content="스팀펑크 리듬 타이밍 게임 - 클락워크 오버드라이브. 8방향 소용돌이 기어와 다이내믹 랜덤 BPM 변속을 정복하세요!">
+  <meta property="og:title" content="클락워크 오버드라이브 (Clockwork Overdrive)">
+  <meta property="og:description" content="웹 오디오 신디사이저와 8방향 나선 궤도가 어우러진 캐주얼 아케이드 스팀펑크 리듬 게임">
+  <meta property="og:type" content="website">
+
+  <!-- SVG 황동 기어 파비콘 -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23b8860b' stroke='%23ffd700' stroke-width='6'/><circle cx='50' cy='50' r='18' fill='%23120818' stroke='%23ff9900' stroke-width='4'/><path d='M46,2 h8 v14 h-8 z M46,84 h8 v14 h-8 z M2,46 h14 v8 h-14 z M84,46 h14 v8 h-14 z M16,16 l6,6 l-6,6 l-6,-6 z M78,78 l6,6 l-6,6 l-6,-6 z M78,16 l6,-6 l6,6 l-6,6 z M16,78 l6,-6 l6,6 l-6,6 z' fill='%23ffd700'/></svg>">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700;800&family=Orbitron:wght@700;900&display=swap');
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body {
+      background: radial-gradient(circle at center, #22122b 0%, #0c0617 60%, #030107 100%);
+      color: #ffde8a;
+      font-family: 'Chakra Petch', 'Orbitron', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    #game-wrapper {
+      position: relative;
+      width: min(96vw, calc(96vh * 16 / 9));
+      aspect-ratio: 16 / 9;
+      box-shadow: 0 0 70px rgba(255, 110, 0, 0.3), 0 0 120px rgba(0, 0, 0, 0.98);
+      border: 5px solid #663d16;
+      border-radius: 14px;
+      overflow: hidden;
+      background-color: #0b0612;
+    }
+
+    /* 빛나는 황동 네온 프레임 */
+    #game-wrapper::before {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border: 2px solid rgba(255, 210, 70, 0.5);
+      border-radius: 10px;
+      pointer-events: none;
+      z-index: 10;
+      box-shadow: inset 0 0 20px rgba(255, 150, 0, 0.25);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .retro-vignette {
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.85);
+      pointer-events: none;
+      z-index: 11;
+    }
+
+    .controls-hint {
+      margin-top: 14px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #e5aa50;
+      text-transform: uppercase;
+      text-shadow: 0 0 10px rgba(255, 180, 0, 0.6);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .key-badge {
+      background: #3e220e;
+      border: 1px solid #e09f3e;
+      border-radius: 4px;
+      padding: 2px 10px;
+      color: #fff0a8;
+      box-shadow: 0 2px 0 #180a03;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <canvas id="gameCanvas" width="1280" height="720"></canvas>
+    <div class="retro-vignette"></div>
+  </div>
+
+  <div class="controls-hint">
+    <span class="key-badge">SPACE</span> or <span class="key-badge">CLICK</span> LOCK ON BEAT &bull; <span class="key-badge">ESC</span> PAUSE
+  </div>
+
+  <script>
+    /* ==========================================================================
+       클락워크 오버드라이브 (Clockwork Overdrive)
+       - 고품질 4코드 폴리포닉 일렉트로 스윙 BGM 엔진
+       - 8콤보 주기 예측불허 다이내믹 랜덤 BPM 시프트 (85~145 BPM)
+       - 8방향 방사 / 나선 소용돌이 / 웨이브 보석 기어 & 비트 바운스
+       ========================================================================== */
+
+    // --- [1. 고품질 멀티트랙 신디사이저 & 사운드 FX 엔진] ---
+    class AudioEngine {
+      constructor() {
+        this.ctx = null;
+        this.isInitialized = false;
+        this.masterGain = null;
+        this.reverbConvolver = null;
+        this.noiseBuffer = null;
+
+        // BGM 시퀀서 속성
+        this.bgmPlaying = false;
+        this.bpm = 96;
+        this.step = 0; // 0 ~ 15 (1마디 = 16스텝)
+        this.bar = 0;  // 0 ~ 3 (4마디 코드 루프)
+        this.nextNoteTime = 0;
+        this.scheduleAheadTime = 0.12;
+        this.timerId = null;
+
+        // 4코드 진행 (Am -> F -> C -> G)
+        this.chordProgression = [
+          // Am (A2, C3, E3, A3)
+          { bass: 55, notes: [110, 130.81, 164.81, 220] },
+          // F (F2, A2, C3, F3)
+          { bass: 43.65, notes: [87.31, 110, 130.81, 174.61] },
+          // C (C2, E2, G2, C3)
+          { bass: 65.41, notes: [130.81, 164.81, 196.00, 261.63] },
+          // G (G2, B2, D3, G3)
+          { bass: 49.00, notes: [98.00, 123.47, 146.83, 196.00] }
+        ];
+
+        // 펑키 16스텝 베이스 패턴 오프셋 (반음 단위)
+        this.bassPattern = [
+          0, 0, 12, 0, 7, 0, 10, 12,
+          0, 0, 15, 12, 10, 0, 7, 5
+        ];
+
+        // 리드 신스 멜로디 (4마디에 걸친 아케이드 훅)
+        this.leadMelody = [
+          // Bar 0 (Am)
+          [440, 0, 440, 523.25, 0, 659.25, 0, 587.33, 523.25, 0, 440, 0, 392, 440, 0, 0],
+          // Bar 1 (F)
+          [349.23, 0, 440, 0, 523.25, 0, 659.25, 587.33, 0, 523.25, 0, 440, 349.23, 0, 392, 0],
+          // Bar 2 (C)
+          [523.25, 0, 659.25, 0, 783.99, 0, 659.25, 0, 587.33, 523.25, 0, 392, 0, 440, 523.25, 0],
+          // Bar 3 (G)
+          [587.33, 0, 659.25, 587.33, 0, 523.25, 0, 440, 392, 0, 440, 0, 493.88, 523.25, 587.33, 0]
+        ];
+      }
+
+      init() {
+        if (this.isInitialized) return;
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        this.ctx = new AudioContextClass();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.setValueAtTime(0.75, this.ctx.currentTime);
+        this.masterGain.connect(this.ctx.destination);
+
+        this.generateNoiseBuffer();
+        this.isInitialized = true;
+      }
+
+      resume() {
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      generateNoiseBuffer() {
+        if (!this.ctx) return;
+        const bufferSize = this.ctx.sampleRate * 2;
+        this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = this.noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+      }
+
+      startBgm(bpm) {
+        this.bpm = bpm;
+        this.step = 0;
+        this.bar = 0;
+        if (!this.ctx) return;
+        this.nextNoteTime = this.ctx.currentTime + 0.05;
+        this.bgmPlaying = true;
+        this.scheduler();
+      }
+
+      stopBgm() {
+        this.bgmPlaying = false;
+        if (this.timerId) clearTimeout(this.timerId);
+      }
+
+      setBpm(newBpm) {
+        this.bpm = newBpm;
+      }
+
+      // 스케줄러 루프
+      scheduler() {
+        if (!this.bgmPlaying || !this.ctx) return;
+        while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime) {
+          this.scheduleStep(this.step, this.bar, this.nextNoteTime);
+          this.advanceStep();
+        }
+        this.timerId = setTimeout(() => this.scheduler(), 25);
+      }
+
+      advanceStep() {
+        const secondsPerBeat = 60.0 / this.bpm;
+        // 스윙 셔플 레이쇼 (홀수 16분음표에 58:42 스윙 적용)
+        const isSwing = (this.step % 2 === 1);
+        const swingRatio = isSwing ? 0.28 : 0.22;
+        this.nextNoteTime += secondsPerBeat * swingRatio;
+
+        this.step = (this.step + 1) % 16;
+        if (this.step === 0) {
+          this.bar = (this.bar + 1) % 4;
+        }
+      }
+
+      scheduleStep(step, bar, time) {
+        const chord = this.chordProgression[bar];
+
+        // 1. 킥 드럼: 스텝 0, 4, 8, 12 (4온더플로어) + 스텝 14 당김음
+        if (step % 4 === 0 || step === 14) {
+          this.playPunchKick(time, step === 14 ? 0.35 : 0.55);
+        }
+
+        // 2. 스팀 스네어: 스텝 4, 12 (2박, 4박)
+        if (step === 4 || step === 12) {
+          this.playReverbSnare(time);
+        }
+
+        // 3. 16비트 스윙 하이햇
+        const isOpen = (step % 4 === 2);
+        this.playSwingHiHat(time, isOpen, step % 2 === 0);
+
+        // 4. 크래시 심벌 (마디 0 시작 시)
+        if (step === 0 && bar === 0) {
+          this.playSteamCrash(time);
+        }
+
+        // 5. 폴리포닉 신스 코드 패드 (스텝 0, 6, 12에 연주)
+        if (step === 0 || step === 6 || step === 12) {
+          const duration = (step === 12) ? 0.35 : 0.6;
+          this.playPolyChord(chord.notes, time, duration);
+        }
+
+        // 6. 펑키 사이드체인 베이스라인
+        const noteOffset = this.bassPattern[step];
+        if (noteOffset !== undefined) {
+          const baseFreq = chord.bass;
+          const freq = baseFreq * Math.pow(2, noteOffset / 12);
+          this.playSlapBass(freq, time);
+        }
+
+        // 7. 아케이드 리드 신스 멜로디
+        const leadFreq = this.leadMelody[bar][step];
+        if (leadFreq > 0) {
+          this.playLeadSynth(leadFreq, time);
+        }
+      }
+
+      // --- [고품질 신디사이저 사운드 구현] ---
+      // 1. 펀치 킥 드럼 (트랜지언트 클릭 + 서브 베이스 펀치)
+      playPunchKick(time, vol = 0.55) {
+        // 어택 클릭
+        const click = this.ctx.createOscillator();
+        const clickGain = this.ctx.createGain();
+        click.type = 'triangle';
+        click.frequency.setValueAtTime(450, time);
+        click.frequency.exponentialRampToValueAtTime(80, time + 0.02);
+        clickGain.gain.setValueAtTime(vol * 0.8, time);
+        clickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.025);
+        click.connect(clickGain);
+        clickGain.connect(this.masterGain);
+        click.start(time);
+        click.stop(time + 0.03);
+
+        // 서브 붐
+        const sub = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(145, time);
+        sub.frequency.exponentialRampToValueAtTime(36, time + 0.16);
+        subGain.gain.setValueAtTime(vol, time);
+        subGain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+        sub.connect(subGain);
+        subGain.connect(this.masterGain);
+        sub.start(time);
+        sub.stop(time + 0.19);
+      }
+
+      // 2. 2톤 스팀 스네어 + 잔향
+      playReverbSnare(time) {
+        // 톤 바디 (2중 톤)
+        [190, 330].forEach((f, idx) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = idx === 0 ? 'triangle' : 'sine';
+          osc.frequency.setValueAtTime(f, time);
+          osc.frequency.exponentialRampToValueAtTime(90, time + 0.09);
+          g.gain.setValueAtTime(0.24, time);
+          g.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+          osc.connect(g);
+          g.connect(this.masterGain);
+          osc.start(time);
+          osc.stop(time + 0.11);
+        });
+
+        // 고압 스팀 스냅 노이즈
+        if (this.noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = this.noiseBuffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(2400, time);
+          filter.Q.setValueAtTime(1.8, time);
+
+          const nGain = this.ctx.createGain();
+          nGain.gain.setValueAtTime(0.35, time);
+          nGain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+
+          noise.connect(filter);
+          filter.connect(nGain);
+          nGain.connect(this.masterGain);
+          noise.start(time);
+          noise.stop(time + 0.23);
+        }
+      }
+
+      // 3. 스윙 하이햇
+      playSwingHiHat(time, isOpen, isDownbeat) {
+        if (!this.noiseBuffer) return;
+        const dur = isOpen ? 0.14 : (isDownbeat ? 0.045 : 0.03);
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.setValueAtTime(isOpen ? 5500 : 7500, time);
+
+        const gain = this.ctx.createGain();
+        const vol = isOpen ? 0.18 : (isDownbeat ? 0.12 : 0.07);
+        gain.gain.setValueAtTime(vol, time);
+        gain.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        noise.start(time);
+        noise.stop(time + dur + 0.01);
+      }
+
+      // 4. 스팀 크래시 심벌
+      playSteamCrash(time) {
+        if (!this.noiseBuffer) return;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(4500, time);
+        filter.frequency.exponentialRampToValueAtTime(1200, time + 0.8);
+        filter.Q.setValueAtTime(1.2, time);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.28, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.85);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        noise.start(time);
+        noise.stop(time + 0.88);
+      }
+
+      // 5. 폴리포닉 4화음 신스 코드
+      playPolyChord(notes, time, duration) {
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const filter = this.ctx.createBiquadFilter();
+
+          // 디튠 코러스 효과
+          osc.type = 'sawtooth';
+          const detune = (idx % 2 === 0 ? 5 : -5);
+          osc.frequency.setValueAtTime(freq, time);
+          osc.detune.setValueAtTime(detune, time);
+
+          filter.type = 'lowpass';
+          filter.frequency.setValueAtTime(2200, time);
+          filter.frequency.exponentialRampToValueAtTime(650, time + duration);
+
+          gain.gain.setValueAtTime(0.08, time);
+          gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.masterGain);
+
+          osc.start(time);
+          osc.stop(time + duration + 0.02);
+        });
+      }
+
+      // 6. 슬랩 펑크 베이스 (사이드체인 어택)
+      playSlapBass(freq, time) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const filter = this.ctx.createBiquadFilter();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, time);
+
+        // 아날로그 필터 플럭
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(freq * 6, time);
+        filter.frequency.exponentialRampToValueAtTime(freq * 1.6, time + 0.14);
+        filter.Q.setValueAtTime(5, time);
+
+        gain.gain.setValueAtTime(0.22, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+
+        osc.start(time);
+        osc.stop(time + 0.17);
+      }
+
+      // 7. 아케이드 리드 멜로디
+      playLeadSynth(freq, time) {
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, time);
+
+        gain.gain.setValueAtTime(0.13, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(time);
+        osc.stop(time + 0.22);
+      }
+
+      // --- [기어 변속(BPM 시프트) 사운드 FX] ---
+      playGearShiftSound(isSpeedUp = true) {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+
+        // 1. 기어 철컥 맞물림 (클랭크 노이즈)
+        if (this.noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = this.noiseBuffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(isSpeedUp ? 3800 : 1800, t);
+          filter.Q.setValueAtTime(3, t);
+
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(0.4, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.masterGain);
+          noise.start(t);
+          noise.stop(t + 0.22);
+        }
+
+        // 2. 증기 사이렌 고동음 (휘슬 스윕)
+        const whistle = this.ctx.createOscillator();
+        const wGain = this.ctx.createGain();
+        whistle.type = 'triangle';
+        if (isSpeedUp) {
+          whistle.frequency.setValueAtTime(400, t);
+          whistle.frequency.exponentialRampToValueAtTime(920, t + 0.3);
+        } else {
+          whistle.frequency.setValueAtTime(850, t);
+          whistle.frequency.exponentialRampToValueAtTime(320, t + 0.3);
+        }
+        wGain.gain.setValueAtTime(0.25, t);
+        wGain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+
+        whistle.connect(wGain);
+        wGain.connect(this.masterGain);
+        whistle.start(t);
+        whistle.stop(t + 0.36);
+      }
+
+      // 타격음 (금속 클랭크)
+      playMetalClank(isPerfect = true) {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const freqs = isPerfect ? [520, 960, 1720, 2600] : [380, 740, 1280];
+
+        freqs.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+          osc.frequency.setValueAtTime(freq, t);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.82, t + 0.16);
+
+          const vol = isPerfect ? (0.35 / (idx + 1)) : (0.2 / (idx + 1));
+          gain.gain.setValueAtTime(vol, t);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(t);
+          osc.stop(t + 0.25);
+        });
+
+        if (this.noiseBuffer) {
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = this.noiseBuffer;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(isPerfect ? 3400 : 2100, t);
+          filter.Q.setValueAtTime(4, t);
+
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(isPerfect ? 0.45 : 0.25, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+
+          noise.connect(filter);
+          filter.connect(gain);
+          gain.connect(this.masterGain);
+          noise.start(t);
+          noise.stop(t + 0.1);
+        }
+      }
+
+      playSteamBlast() {
+        if (!this.ctx || !this.noiseBuffer) return;
+        const t = this.ctx.currentTime;
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = this.noiseBuffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(8000, t);
+        filter.frequency.exponentialRampToValueAtTime(800, t + 0.4);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.48, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        noise.start(t);
+        noise.stop(t + 0.44);
+
+        const sub = this.ctx.createOscillator();
+        const subGain = this.ctx.createGain();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(140, t);
+        sub.frequency.exponentialRampToValueAtTime(32, t + 0.3);
+
+        subGain.gain.setValueAtTime(0.55, t);
+        subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.32);
+
+        sub.connect(subGain);
+        subGain.connect(this.masterGain);
+        sub.start(t);
+        sub.stop(t + 0.34);
+      }
+
+      playMissScreech() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(260, t);
+        osc.frequency.linearRampToValueAtTime(70, t + 0.28);
+
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.32);
+      }
+
+      playCatastrophicFailure() {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime;
+        const boom = this.ctx.createOscillator();
+        const boomGain = this.ctx.createGain();
+        boom.type = 'triangle';
+        boom.frequency.setValueAtTime(180, t);
+        boom.frequency.exponentialRampToValueAtTime(16, t + 1.2);
+
+        boomGain.gain.setValueAtTime(0.75, t);
+        boomGain.gain.exponentialRampToValueAtTime(0.001, t + 1.25);
+
+        boom.connect(boomGain);
+        boomGain.connect(this.masterGain);
+        boom.start(t);
+        boom.stop(t + 1.3);
+      }
+    }
+
+    // --- [2. 파티클 및 비주얼 FX 시스템] ---
+    class Particle {
+      constructor(x, y, type, color, angle, speed, life) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.color = color;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.life = life;
+        this.maxLife = life;
+        this.size = type === 'steam' ? 14 : (type === 'debris' ? 8 + Math.random() * 8 : 4 + Math.random() * 4);
+        this.rotation = Math.random() * Math.PI * 2;
+        this.vRot = (Math.random() - 0.5) * 0.3;
+      }
+
+      update(dt) {
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.rotation += this.vRot;
+        this.life -= dt;
+
+        if (this.type === 'spark') {
+          this.vy += 180 * dt;
+          this.vx *= 0.97;
+        } else if (this.type === 'steam') {
+          this.vy -= 45 * dt;
+          this.size += 40 * dt;
+          this.vx *= 0.95;
+        } else if (this.type === 'debris') {
+          this.vy += 380 * dt;
+          this.vx *= 0.98;
+        }
+      }
+
+      draw(ctx) {
+        const alpha = Math.max(0, this.life / this.maxLife);
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        if (this.type === 'spark') {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = this.color;
+          ctx.shadowColor = this.color;
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size * alpha, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (this.type === 'steam') {
+          ctx.globalAlpha = alpha * 0.45;
+          const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, this.size);
+          grad.addColorStop(0, 'rgba(255, 235, 210, 0.9)');
+          grad.addColorStop(0.5, 'rgba(210, 160, 120, 0.5)');
+          grad.addColorStop(1, 'rgba(100, 50, 20, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (this.type === 'debris') {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = this.color;
+          ctx.strokeStyle = '#201008';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.rect(-this.size / 2, -this.size / 2, this.size, this.size);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    class ShockwaveRing {
+      constructor(x, y, color, maxRadius = 140, duration = 0.45) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.maxRadius = maxRadius;
+        this.duration = duration;
+        this.time = 0;
+      }
+
+      update(dt) {
+        this.time += dt;
+      }
+
+      isDone() {
+        return this.time >= this.duration;
+      }
+
+      draw(ctx) {
+        const progress = this.time / this.duration;
+        const currentRadius = progress * this.maxRadius;
+        const alpha = Math.max(0, 1 - progress);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, currentRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = this.color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 4 * (1 - progress * 0.5);
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 12;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // --- [3. 화려한 캐주얼 보석 기어 렌더링 함수] ---
+    const GEAR_THEMES = [
+      { name: 'ruby', mainColor: '#ff2d55', lightColor: '#ff85a1', darkColor: '#6a001a', rimGlow: '#ff003c' },
+      { name: 'gold', mainColor: '#ffb300', lightColor: '#ffe57f', darkColor: '#7c4300', rimGlow: '#ffaa00' },
+      { name: 'sapphire', mainColor: '#00d2ff', lightColor: '#80eaff', darkColor: '#00477a', rimGlow: '#00c3ff' },
+      { name: 'emerald', mainColor: '#00e676', lightColor: '#69f0ae', darkColor: '#00592e', rimGlow: '#00ff88' },
+      { name: 'amethyst', mainColor: '#d500f9', lightColor: '#ea80fc', darkColor: '#4a0072', rimGlow: '#e040fb' }
+    ];
+
+    function drawCasualGear(ctx, x, y, radius, teeth, rotation, themeIndex = 1, isCore = false) {
+      const theme = GEAR_THEMES[themeIndex % GEAR_THEMES.length];
+      const toothHeight = isCore ? radius * 0.16 : radius * 0.22;
+      const toothWidthAngle = (Math.PI * 2 / teeth) * 0.44;
+      const innerRadius = radius - toothHeight;
+      const hubRadius = radius * 0.38;
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rotation);
+
+      ctx.beginPath();
+      for (let i = 0; i < teeth; i++) {
+        const a = (i / teeth) * Math.PI * 2;
+        const a1 = a - toothWidthAngle / 2;
+        const a2 = a + toothWidthAngle / 2;
+        const a3 = a + (Math.PI / teeth) - toothWidthAngle / 2;
+
+        if (i === 0) {
+          ctx.moveTo(Math.cos(a1) * innerRadius, Math.sin(a1) * innerRadius);
+        } else {
+          ctx.lineTo(Math.cos(a1) * innerRadius, Math.sin(a1) * innerRadius);
+        }
+        ctx.lineTo(Math.cos(a1 + toothWidthAngle * 0.16) * (innerRadius + toothHeight), Math.sin(a1 + toothWidthAngle * 0.16) * (innerRadius + toothHeight));
+        ctx.lineTo(Math.cos(a2 - toothWidthAngle * 0.16) * (innerRadius + toothHeight), Math.sin(a2 - toothWidthAngle * 0.16) * (innerRadius + toothHeight));
+        ctx.lineTo(Math.cos(a2) * innerRadius, Math.sin(a2) * innerRadius);
+        ctx.lineTo(Math.cos(a3) * innerRadius, Math.sin(a3) * innerRadius);
+      }
+      ctx.closePath();
+
+      const grad = ctx.createRadialGradient(-radius * 0.25, -radius * 0.25, 4, 0, 0, radius + toothHeight);
+      grad.addColorStop(0, theme.lightColor);
+      grad.addColorStop(0.45, theme.mainColor);
+      grad.addColorStop(0.85, theme.darkColor);
+      grad.addColorStop(1, '#110508');
+
+      ctx.fillStyle = grad;
+      ctx.shadowColor = theme.rimGlow;
+      ctx.shadowBlur = isCore ? 25 : 12;
+      ctx.fill();
+
+      ctx.strokeStyle = theme.lightColor;
+      ctx.lineWidth = isCore ? 3 : 2;
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, innerRadius * 0.82, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+
+      const spokeCount = isCore ? 6 : 4;
+      const spokeHoleR = innerRadius * 0.54;
+      const holeSize = innerRadius * 0.17;
+      for (let s = 0; s < spokeCount; s++) {
+        const sa = (s / spokeCount) * Math.PI * 2;
+        const hx = Math.cos(sa) * spokeHoleR;
+        const hy = Math.sin(sa) * spokeHoleR;
+
+        ctx.beginPath();
+        ctx.arc(hx, hy, holeSize, 0, Math.PI * 2);
+        ctx.fillStyle = '#08050e';
+        ctx.fill();
+        ctx.strokeStyle = theme.rimGlow;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(0, 0, hubRadius, 0, Math.PI * 2);
+      const hubGrad = ctx.createRadialGradient(-hubRadius * 0.3, -hubRadius * 0.3, 1, 0, 0, hubRadius);
+      hubGrad.addColorStop(0, '#ffffff');
+      hubGrad.addColorStop(0.4, theme.lightColor);
+      hubGrad.addColorStop(0.9, theme.darkColor);
+      ctx.fillStyle = hubGrad;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, 0, hubRadius * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = '#0e0814';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // --- [4. 비트 노트 객체] ---
+    class ApproachGearNote {
+      constructor(id, targetTime, trajectoryType, angleIndex, spawnTime, themeIndex) {
+        this.id = id;
+        this.targetTime = targetTime;
+        this.spawnTime = spawnTime;
+        this.trajectoryType = trajectoryType;
+        this.angleIndex = angleIndex;
+        this.themeIndex = themeIndex;
+        this.radius = 42;
+        this.teeth = 10;
+        this.hit = false;
+        this.missed = false;
+        this.trail = [];
+      }
+
+      getProgress(currentTime) {
+        return (currentTime - this.spawnTime) / (this.targetTime - this.spawnTime);
+      }
+
+      getPosition(progress, centerX, centerY, mainRadius) {
+        const baseAngle = (this.angleIndex / 8) * Math.PI * 2;
+        const targetDistance = mainRadius + this.radius - 8;
+        const startDistance = 750;
+
+        let currentDist = startDistance + (targetDistance - startDistance) * progress;
+        let currentAngle = baseAngle;
+
+        if (this.trajectoryType === 'RADIAL') {
+          currentAngle = baseAngle;
+        } else if (this.trajectoryType === 'SPIRAL_CW') {
+          const spiralRot = (1.0 - progress) * Math.PI * 2.2;
+          currentAngle = baseAngle + spiralRot;
+        } else if (this.trajectoryType === 'SPIRAL_CCW') {
+          const spiralRot = (1.0 - progress) * Math.PI * 2.2;
+          currentAngle = baseAngle - spiralRot;
+        } else if (this.trajectoryType === 'WAVE') {
+          const waveOffset = Math.sin(progress * Math.PI * 4) * 0.35 * (1.0 - progress);
+          currentAngle = baseAngle + waveOffset;
+        }
+
+        const x = centerX + Math.cos(currentAngle) * currentDist;
+        const y = centerY + Math.sin(currentAngle) * currentDist;
+        const targetX = centerX + Math.cos(baseAngle) * targetDistance;
+        const targetY = centerY + Math.sin(baseAngle) * targetDistance;
+
+        return { x, y, angle: currentAngle, targetX, targetY, baseAngle, targetDistance };
+      }
+    }
+
+    // --- [5. 메인 게임 컨트롤러] ---
+    class ClockworkGame {
+      constructor() {
+        this.canvas = document.getElementById('gameCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.audio = new AudioEngine();
+
+        this.state = 'START';
+        this.score = 0;
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.lives = 3;
+        this.maxLives = 3;
+
+        // 영구 로컬 스토리지 기록 로드
+        this.highScore = parseInt(localStorage.getItem('cw_high_score') || '0', 10);
+        this.highCombo = parseInt(localStorage.getItem('cw_high_combo') || '0', 10);
+        this.highBpm = parseInt(localStorage.getItem('cw_high_bpm') || '96', 10);
+
+        // BPM 시스템
+        this.baseBpm = 96;
+        this.currentBpm = 96;
+        this.maxReachedBpm = 96;
+        this.lastShiftCombo = 0; // 마지막으로 템포가 바뀐 콤보
+
+        // 랜덤 BPM 풀 (다양한 스피드 체인지)
+        this.randomBpmPool = [86, 96, 108, 120, 132, 142];
+
+        this.gameStartTime = 0;
+        this.lastTime = 0;
+        this.nextBeatTime = 0;
+        this.beatIndex = 0;
+        this.noteQueue = [];
+        this.noteIdCounter = 0;
+
+        this.mainGear = {
+          x: 640,
+          y: 360,
+          radius: 120,
+          teeth: 24,
+          rotation: 0,
+          impactPulse: 0,
+          beatPulse: 0
+        };
+
+        this.particles = [];
+        this.shockwaves = [];
+        this.screenShakeTime = 0;
+        this.screenShakeIntensity = 0;
+        this.missFlashAlpha = 0;
+        this.overdriveLevel = 0;
+
+        // 판정 및 템포 알림 팝업
+        this.judgePopup = { text: '', color: '#ffd700', scale: 1.0, alpha: 0 };
+        this.tempoPopup = { text: '', color: '#00e5ff', scale: 1.0, alpha: 0 };
+        this.comboPopScale = 1.0;
+
+        this.isKeyPressed = false;
+
+        this.initEvents();
+        this.animate = this.animate.bind(this);
+        requestAnimationFrame(this.animate);
+      }
+
+      initEvents() {
+        window.addEventListener('keydown', (e) => {
+          if (e.code === 'Space') {
+            e.preventDefault();
+            if (!this.isKeyPressed) {
+              this.isKeyPressed = true;
+              this.handleActionInput();
+            }
+          } else if (e.code === 'Escape') {
+            this.togglePause();
+          }
+        });
+
+        window.addEventListener('keyup', (e) => {
+          if (e.code === 'Space') {
+            this.isKeyPressed = false;
+          }
+        });
+
+        this.canvas.addEventListener('mousedown', (e) => {
+          if (e.button === 0) {
+            this.handleActionInput();
+          }
+        });
+      }
+
+      handleActionInput() {
+        this.audio.init();
+        this.audio.resume();
+
+        if (this.state === 'START') {
+          this.startGame();
+          return;
+        }
+
+        if (this.state === 'GAMEOVER') {
+          this.resetGame();
+          this.startGame();
+          return;
+        }
+
+        if (this.state === 'PLAYING') {
+          this.judgeHit();
+        }
+      }
+
+      togglePause() {
+        if (this.state === 'PLAYING') {
+          this.state = 'PAUSED';
+          this.audio.stopBgm();
+        } else if (this.state === 'PAUSED') {
+          this.state = 'PLAYING';
+          this.audio.startBgm(this.currentBpm);
+        }
+      }
+
+      startGame() {
+        this.state = 'PLAYING';
+        this.score = 0;
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.lives = this.maxLives;
+        this.currentBpm = this.baseBpm;
+        this.maxReachedBpm = this.baseBpm;
+        this.lastShiftCombo = 0;
+        this.noteQueue = [];
+        this.particles = [];
+        this.shockwaves = [];
+        this.beatIndex = 0;
+
+        const now = performance.now();
+        this.gameStartTime = now;
+        this.lastTime = now;
+        this.nextBeatTime = now + (60000 / this.currentBpm);
+
+        this.audio.startBgm(this.currentBpm);
+      }
+
+      resetGame() {
+        this.noteQueue = [];
+        this.particles = [];
+        this.shockwaves = [];
+        this.screenShakeTime = 0;
+        this.missFlashAlpha = 0;
+      }
+
+      // --- [랜덤 BPM 변속 시스템: 8콤보 주기마다 템포 급변] ---
+      checkDynamicTempoShift() {
+        // 8콤보 이상이고, 이전 시프트 이후 8콤보가 누적되었을 때 발동
+        if (this.combo >= 8 && (this.combo - this.lastShiftCombo >= 8)) {
+          this.lastShiftCombo = this.combo;
+
+          // 현재 BPM과 다른 새로운 BPM을 랜덤 선택
+          let candidates = this.randomBpmPool.filter(bpm => bpm !== this.currentBpm);
+          // 고콤보(24 이상)일 경우 고속 후보 비중 증가
+          if (this.combo >= 24) {
+            candidates.push(132, 142, 148);
+          }
+          const newBpm = candidates[Math.floor(Math.random() * candidates.length)];
+          const isSpeedUp = newBpm > this.currentBpm;
+          const prevBpm = this.currentBpm;
+          this.currentBpm = newBpm;
+
+          if (this.currentBpm > this.maxReachedBpm) {
+            this.maxReachedBpm = this.currentBpm;
+          }
+
+          // 오디오 템포 변경 및 기어 변속 사운드
+          this.audio.setBpm(this.currentBpm);
+          this.audio.playGearShiftSound(isSpeedUp);
+
+          // 시각/청각 연출 피드백
+          this.triggerShake(14, 0.35);
+          this.spawnSteamBurst(this.mainGear.x, this.mainGear.y, 35);
+          this.shockwaves.push(new ShockwaveRing(
+            this.mainGear.x, this.mainGear.y,
+            isSpeedUp ? '#00e5ff' : '#ff9100',
+            340, 0.6
+          ));
+
+          const shiftText = isSpeedUp
+            ? `⚡ GEAR SHIFT! ${newBpm} BPM (ACCEL) ⚡`
+            : `🌀 GEAR SHIFT! ${newBpm} BPM (SLOW) 🌀`;
+          const shiftColor = isSpeedUp ? '#00ffff' : '#ff9900';
+          this.showTempoNotice(shiftText, shiftColor);
+        }
+      }
+
+      judgeHit() {
+        const now = performance.now();
+        let closestNote = null;
+        let minDiff = Infinity;
+
+        for (const note of this.noteQueue) {
+          if (note.hit || note.missed) continue;
+          const diff = now - note.targetTime;
+          if (Math.abs(diff) < Math.abs(minDiff)) {
+            minDiff = diff;
+            closestNote = note;
+          }
+        }
+
+        if (closestNote && Math.abs(minDiff) <= 160) {
+          const absDiff = Math.abs(minDiff);
+
+          if (absDiff <= 55) {
+            // PERFECT
+            closestNote.hit = true;
+            this.combo++;
+            if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+            this.score += 300 + this.combo * 25;
+            this.mainGear.impactPulse = 1.0;
+            this.comboPopScale = 1.45;
+
+            this.audio.playMetalClank(true);
+            this.audio.playSteamBlast();
+            this.triggerShake(8, 0.22);
+            this.spawnHitEffects(closestNote, true);
+            this.showJudgeFeedback('PERFECT!!', '#ffd700');
+
+            // 랜덤 BPM 변속 체크
+            this.checkDynamicTempoShift();
+          } else if (absDiff <= 115) {
+            // GOOD
+            closestNote.hit = true;
+            this.combo++;
+            if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+            this.score += 150 + this.combo * 12;
+            this.mainGear.impactPulse = 0.5;
+            this.comboPopScale = 1.25;
+
+            this.audio.playMetalClank(false);
+            this.triggerShake(4, 0.12);
+            this.spawnHitEffects(closestNote, false);
+            this.showJudgeFeedback('GOOD!', '#ffb74d');
+
+            // 랜덤 BPM 변속 체크
+            this.checkDynamicTempoShift();
+          } else {
+            this.handleMiss(closestNote, 'POOR TIMING');
+          }
+        } else {
+          this.triggerShake(2, 0.05);
+        }
+      }
+
+      handleMiss(note, reason = 'MISS') {
+        if (note) note.missed = true;
+        this.combo = 0;
+        this.lastShiftCombo = 0; // 콤보 초기화 시 시프트 카운트 리셋
+        this.lives--;
+        this.audio.playMissScreech();
+        this.missFlashAlpha = 0.7;
+        this.triggerShake(14, 0.35);
+        this.showJudgeFeedback(reason, '#ff3344');
+
+        if (note) {
+          const pos = note.getPosition(1.0, this.mainGear.x, this.mainGear.y, this.mainGear.radius);
+          for (let i = 0; i < 12; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            this.particles.push(new Particle(pos.x, pos.y, 'spark', '#ff3344', angle, 140 + Math.random() * 80, 0.35));
+          }
+        }
+
+        if (this.lives <= 0) {
+          this.triggerGameOver();
+        }
+      }
+
+      triggerGameOver() {
+        this.state = 'GAMEOVER';
+        this.audio.stopBgm();
+        this.audio.playCatastrophicFailure();
+        this.triggerShake(26, 0.9);
+        this.missFlashAlpha = 0.95;
+
+        // 최고 기록 영구 갱신
+        if (this.score > this.highScore) {
+          this.highScore = this.score;
+          localStorage.setItem('cw_high_score', String(this.highScore));
+        }
+        if (this.maxCombo > this.highCombo) {
+          this.highCombo = this.maxCombo;
+          localStorage.setItem('cw_high_combo', String(this.highCombo));
+        }
+        if (this.maxReachedBpm > this.highBpm) {
+          this.highBpm = this.maxReachedBpm;
+          localStorage.setItem('cw_high_bpm', String(this.highBpm));
+        }
+
+        for (let i = 0; i < 60; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 120 + Math.random() * 380;
+          const theme = GEAR_THEMES[Math.floor(Math.random() * GEAR_THEMES.length)];
+          this.particles.push(new Particle(this.mainGear.x, this.mainGear.y, 'debris', theme.mainColor, angle, speed, 1.5));
+        }
+        this.spawnSteamBurst(this.mainGear.x, this.mainGear.y, 45);
+        this.shockwaves.push(new ShockwaveRing(this.mainGear.x, this.mainGear.y, '#ff1744', 380, 0.7));
+      }
+
+      triggerShake(intensity, duration) {
+        this.screenShakeIntensity = intensity;
+        this.screenShakeTime = duration;
+      }
+
+      spawnHitEffects(note, isPerfect) {
+        const pos = note.getPosition(1.0, this.mainGear.x, this.mainGear.y, this.mainGear.radius);
+        const theme = GEAR_THEMES[note.themeIndex % GEAR_THEMES.length];
+
+        const ringColor = isPerfect ? theme.rimGlow : '#ffb74d';
+        this.shockwaves.push(new ShockwaveRing(pos.x, pos.y, ringColor, isPerfect ? 160 : 100, isPerfect ? 0.45 : 0.3));
+
+        const count = isPerfect ? 24 : 12;
+        for (let i = 0; i < count; i++) {
+          const angle = pos.baseAngle + Math.PI + (Math.random() - 0.5) * Math.PI * 1.4;
+          const speed = 140 + Math.random() * 280;
+          const col = Math.random() > 0.4 ? theme.lightColor : '#ffffff';
+          this.particles.push(new Particle(pos.x, pos.y, 'spark', col, angle, speed, 0.45 + Math.random() * 0.3));
+        }
+
+        for (let i = 0; i < 6; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          this.particles.push(new Particle(pos.x, pos.y, 'steam', null, angle, 40 + Math.random() * 60, 0.7));
+        }
+      }
+
+      spawnSteamBurst(x, y, count = 25) {
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = 70 + Math.random() * 200;
+          this.particles.push(new Particle(x, y, 'steam', null, angle, speed, 0.8 + Math.random() * 0.5));
+        }
+      }
+
+      showJudgeFeedback(text, color) {
+        this.judgePopup.text = text;
+        this.judgePopup.color = color;
+        this.judgePopup.scale = 1.6;
+        this.judgePopup.alpha = 1.0;
+      }
+
+      showTempoNotice(text, color) {
+        this.tempoPopup.text = text;
+        this.tempoPopup.color = color;
+        this.tempoPopup.scale = 1.5;
+        this.tempoPopup.alpha = 1.0;
+      }
+
+      // --- [6. 게임 루프 및 틱 업데이트] ---
+      update(dt, now) {
+        if (this.screenShakeTime > 0) {
+          this.screenShakeTime -= dt;
+        }
+
+        if (this.missFlashAlpha > 0) {
+          this.missFlashAlpha = Math.max(0, this.missFlashAlpha - dt * 2.5);
+        }
+
+        if (this.judgePopup.alpha > 0) {
+          this.judgePopup.scale += (1.0 - this.judgePopup.scale) * dt * 8.0;
+          this.judgePopup.alpha = Math.max(0, this.judgePopup.alpha - dt * 1.5);
+        }
+
+        if (this.tempoPopup.alpha > 0) {
+          this.tempoPopup.scale += (1.0 - this.tempoPopup.scale) * dt * 6.0;
+          this.tempoPopup.alpha = Math.max(0, this.tempoPopup.alpha - dt * 0.9);
+        }
+
+        if (this.comboPopScale > 1.0) {
+          this.comboPopScale += (1.0 - this.comboPopScale) * dt * 9.0;
+        }
+
+        const beatInterval = 60000 / this.currentBpm;
+        const beatPhase = ((now - this.gameStartTime) % beatInterval) / beatInterval;
+        this.mainGear.beatPulse = Math.max(0, Math.exp(-beatPhase * 6.5));
+
+        const rotSpeed = (this.currentBpm / 60) * Math.PI * 0.75;
+        this.mainGear.rotation += rotSpeed * dt;
+        if (this.mainGear.impactPulse > 0) {
+          this.mainGear.impactPulse = Math.max(0, this.mainGear.impactPulse - dt * 4.5);
+        }
+
+        const targetPressure = Math.min(1.0, (this.currentBpm - 80) / 70 + (this.combo * 0.02));
+        this.overdriveLevel += (targetPressure - this.overdriveLevel) * dt * 3.0;
+
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.update(dt);
+          if (p.life <= 0) this.particles.splice(i, 1);
+        }
+
+        for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+          const sw = this.shockwaves[i];
+          sw.update(dt);
+          if (sw.isDone()) this.shockwaves.splice(i, 1);
+        }
+
+        if (this.state !== 'PLAYING') return;
+
+        const travelBeats = 3.5;
+        const travelTime = travelBeats * beatInterval;
+        const trajectories = ['RADIAL', 'SPIRAL_CW', 'SPIRAL_CCW', 'WAVE'];
+
+        while (this.nextBeatTime <= now + travelTime) {
+          const targetTime = this.nextBeatTime;
+          const spawnTime = targetTime - travelTime;
+
+          const angleIndex = (this.beatIndex * 3 + Math.floor(Math.random() * 3)) % 8;
+          const trajectoryType = trajectories[this.beatIndex % trajectories.length];
+          const themeIndex = this.beatIndex % GEAR_THEMES.length;
+
+          this.noteQueue.push(new ApproachGearNote(this.noteIdCounter++, targetTime, trajectoryType, angleIndex, spawnTime, themeIndex));
+
+          this.nextBeatTime += beatInterval;
+          this.beatIndex++;
+        }
+
+        for (let i = this.noteQueue.length - 1; i >= 0; i--) {
+          const note = this.noteQueue[i];
+          const progress = note.getProgress(now);
+
+          if (progress >= 0 && progress <= 1.2 && !note.hit) {
+            const pos = note.getPosition(progress, this.mainGear.x, this.mainGear.y, this.mainGear.radius);
+            note.trail.push({ x: pos.x, y: pos.y });
+            if (note.trail.length > 7) note.trail.shift();
+          }
+
+          if (now > note.targetTime + 260) {
+            if (!note.hit && !note.missed) {
+              this.handleMiss(note, 'MISSED!');
+            }
+            this.noteQueue.splice(i, 1);
+          }
+        }
+      }
+
+      // --- [7. Canvas 렌더링] ---
+      draw() {
+        const ctx = this.ctx;
+        const width = 1280;
+        const height = 720;
+
+        ctx.save();
+
+        if (this.screenShakeTime > 0) {
+          const s = this.screenShakeIntensity * (this.screenShakeTime / 0.3);
+          const offsetX = (Math.random() - 0.5) * s * 2;
+          const offsetY = (Math.random() - 0.5) * s * 2;
+          ctx.translate(offsetX, offsetY);
+        }
+
+        this.drawBackground(ctx, width, height);
+        this.drawOrbitTracks(ctx);
+        this.drawApproachGears(ctx);
+        this.drawMainCore(ctx);
+
+        for (const sw of this.shockwaves) {
+          sw.draw(ctx);
+        }
+
+        for (const p of this.particles) {
+          p.draw(ctx);
+        }
+
+        this.drawArcadeHUD(ctx, width, height);
+
+        if (this.missFlashAlpha > 0) {
+          ctx.fillStyle = `rgba(255, 20, 40, ${this.missFlashAlpha})`;
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        this.drawStateOverlays(ctx, width, height);
+
+        ctx.restore();
+      }
+
+      drawBackground(ctx, w, h) {
+        const beatLight = this.mainGear.beatPulse * 0.09;
+        const bgGrad = ctx.createRadialGradient(w / 2, h / 2, 40, w / 2, h / 2, 750);
+        bgGrad.addColorStop(0, `rgba(55, 22, 75, ${0.9 + beatLight})`);
+        bgGrad.addColorStop(0.5, '#13091e');
+        bgGrad.addColorStop(1, '#050209');
+        ctx.fillStyle = bgGrad;
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.save();
+        ctx.globalAlpha = 0.07;
+        drawCasualGear(ctx, 160, 160, 240, 32, this.mainGear.rotation * 0.3, 0);
+        drawCasualGear(ctx, w - 160, h - 140, 280, 36, -this.mainGear.rotation * 0.25, 2);
+        ctx.restore();
+
+        ctx.strokeStyle = 'rgba(255, 180, 50, 0.05)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x < w; x += 50) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y < h; y += 50) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(this.mainGear.x, this.mainGear.y, 235, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 180, 40, 0.18)';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      drawOrbitTracks(ctx) {
+        const cx = this.mainGear.x;
+        const cy = this.mainGear.y;
+        const targetDist = this.mainGear.radius + 42 - 8;
+
+        ctx.save();
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const tx = cx + Math.cos(a) * targetDist;
+          const ty = cy + Math.sin(a) * targetDist;
+
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a) * 160, cy + Math.sin(a) * 160);
+          ctx.lineTo(cx + Math.cos(a) * 600, cy + Math.sin(a) * 600);
+          ctx.strokeStyle = 'rgba(255, 200, 80, 0.08)';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.arc(tx, ty, 44, 0, Math.PI * 2);
+          ctx.setLineDash([3, 4]);
+          ctx.strokeStyle = 'rgba(255, 215, 0, 0.35)';
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.beginPath();
+          ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255, 200, 50, 0.6)';
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      drawApproachGears(ctx) {
+        const now = performance.now();
+        const mg = this.mainGear;
+
+        for (const note of this.noteQueue) {
+          if (note.hit) continue;
+
+          const progress = note.getProgress(now);
+          if (progress < 0 || progress > 1.4) continue;
+
+          const pos = note.getPosition(progress, mg.x, mg.y, mg.radius);
+          const theme = GEAR_THEMES[note.themeIndex % GEAR_THEMES.length];
+
+          if (note.trail.length > 1) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(note.trail[0].x, note.trail[0].y);
+            for (let t = 1; t < note.trail.length; t++) {
+              ctx.lineTo(note.trail[t].x, note.trail[t].y);
+            }
+            ctx.strokeStyle = theme.rimGlow;
+            ctx.globalAlpha = 0.35;
+            ctx.lineWidth = 8;
+            ctx.shadowColor = theme.rimGlow;
+            ctx.shadowBlur = 12;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          const gearRatio = mg.teeth / note.teeth;
+          const noteRotation = -(mg.rotation * gearRatio) + pos.angle;
+
+          drawCasualGear(ctx, pos.x, pos.y, note.radius, note.teeth, noteRotation, note.themeIndex, false);
+
+          if (progress < 1.0) {
+            const shrinkRatio = 1.0 + (1.0 - progress) * 1.35;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, note.radius * shrinkRatio, 0, Math.PI * 2);
+            ctx.strokeStyle = theme.lightColor;
+            ctx.globalAlpha = Math.min(0.85, progress * 0.95);
+            ctx.lineWidth = 2.2;
+            ctx.shadowColor = theme.rimGlow;
+            ctx.shadowBlur = 8;
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+            ctx.shadowBlur = 0;
+          }
+        }
+      }
+
+      drawMainCore(ctx) {
+        const mg = this.mainGear;
+        const bounceScale = 1.0 + (mg.beatPulse * 0.08) + (mg.impactPulse * 0.06);
+
+        ctx.save();
+        ctx.translate(mg.x, mg.y);
+        ctx.scale(bounceScale, bounceScale);
+        ctx.translate(-mg.x, -mg.y);
+
+        drawCasualGear(ctx, mg.x, mg.y, mg.radius, mg.teeth, mg.rotation, 1, true);
+
+        if (this.overdriveLevel > 0.4) {
+          const sparkCount = Math.floor(this.overdriveLevel * 5);
+          ctx.strokeStyle = '#00f0ff';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#00f0ff';
+          ctx.shadowBlur = 10;
+          for (let s = 0; s < sparkCount; s++) {
+            const a = Math.random() * Math.PI * 2;
+            const r1 = mg.radius * 0.5;
+            const r2 = mg.radius * (0.8 + Math.random() * 0.35);
+            ctx.beginPath();
+            ctx.moveTo(mg.x + Math.cos(a) * r1, mg.y + Math.sin(a) * r1);
+            ctx.lineTo(mg.x + Math.cos(a + 0.2) * (r1 + r2) * 0.5, mg.y + Math.sin(a + 0.2) * (r1 + r2) * 0.5);
+            ctx.lineTo(mg.x + Math.cos(a) * r2, mg.y + Math.sin(a) * r2);
+            ctx.stroke();
+          }
+        }
+
+        ctx.restore();
+      }
+
+      drawArcadeHUD(ctx, w, h) {
+        ctx.save();
+
+        this.drawCasualGauge(ctx, 130, 110, 75);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffb300';
+        ctx.font = 'bold 15px "Chakra Petch", monospace';
+        ctx.fillText('SCORE OVERDRIVE', w - 45, 40);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '900 38px "Orbitron", monospace';
+        ctx.shadowColor = '#ff9900';
+        ctx.shadowBlur = 12;
+        ctx.fillText(String(this.score).padStart(7, '0'), w - 45, 78);
+        ctx.shadowBlur = 0;
+
+        // 최고 기록 (BEST SCORE)
+        ctx.fillStyle = '#ffca28';
+        ctx.font = 'bold 14px "Chakra Petch", monospace';
+        ctx.fillText(`BEST: ${String(Math.max(this.score, this.highScore)).padStart(7, '0')}`, w - 45, 102);
+
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 18px "Orbitron", monospace';
+        ctx.fillText(`SPEED ${this.currentBpm} BPM`, w - 45, 128);
+
+        // 콤보 팝
+        if (this.combo > 0) {
+          ctx.save();
+          ctx.translate(w / 2, 85);
+          ctx.scale(this.comboPopScale, this.comboPopScale);
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ffe082';
+          ctx.font = '900 44px "Orbitron", sans-serif';
+          ctx.shadowColor = '#ff6f00';
+          ctx.shadowBlur = 16;
+          ctx.fillText(`${this.combo} COMBO`, 0, 0);
+          ctx.restore();
+        }
+
+        // 판정 피드백
+        if (this.judgePopup.alpha > 0) {
+          ctx.save();
+          ctx.translate(w / 2, 138);
+          ctx.scale(this.judgePopup.scale, this.judgePopup.scale);
+          ctx.textAlign = 'center';
+          ctx.globalAlpha = this.judgePopup.alpha;
+          ctx.fillStyle = this.judgePopup.color;
+          ctx.font = '900 34px "Orbitron", sans-serif';
+          ctx.shadowColor = this.judgePopup.color;
+          ctx.shadowBlur = 18;
+          ctx.fillText(this.judgePopup.text, 0, 0);
+          ctx.restore();
+        }
+
+        // 템포 시프트 전자기 알림 배너
+        if (this.tempoPopup.alpha > 0) {
+          ctx.save();
+          ctx.translate(w / 2, 185);
+          ctx.scale(this.tempoPopup.scale, this.tempoPopup.scale);
+          ctx.textAlign = 'center';
+          ctx.globalAlpha = this.tempoPopup.alpha;
+          ctx.fillStyle = this.tempoPopup.color;
+          ctx.font = '900 24px "Orbitron", sans-serif';
+          ctx.shadowColor = this.tempoPopup.color;
+          ctx.shadowBlur = 20;
+          ctx.fillText(this.tempoPopup.text, 0, 0);
+          ctx.restore();
+        }
+
+        this.drawEnergyCores(ctx, w / 2, h - 55);
+
+        ctx.restore();
+      }
+
+      drawCasualGauge(ctx, cx, cy, r) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        const rimGrad = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+        rimGrad.addColorStop(0, '#ffe082');
+        rimGrad.addColorStop(0.5, '#ff8f00');
+        rimGrad.addColorStop(1, '#3e1a00');
+        ctx.fillStyle = rimGrad;
+        ctx.fill();
+        ctx.strokeStyle = '#180a02';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r - 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#120818';
+        ctx.fill();
+
+        const startAng = Math.PI * 0.75;
+        const endAng = Math.PI * 2.25;
+        const ticks = 10;
+        for (let i = 0; i <= ticks; i++) {
+          const a = startAng + (i / ticks) * (endAng - startAng);
+          const isRed = i >= 8;
+          ctx.strokeStyle = isRed ? '#ff1744' : '#00e5ff';
+          ctx.lineWidth = isRed ? 3 : 1.8;
+
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a) * (r - 22), cy + Math.sin(a) * (r - 22));
+          ctx.lineTo(cx + Math.cos(a) * (r - 12), cy + Math.sin(a) * (r - 12));
+          ctx.stroke();
+        }
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold 10px "Chakra Petch"';
+        ctx.fillText('PSI x100', cx, cy + 28);
+        ctx.fillText('PRESSURE', cx, cy - 22);
+
+        const needleAngle = startAng + Math.min(1.0, Math.max(0, this.overdriveLevel)) * (endAng - startAng);
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(needleAngle);
+        ctx.beginPath();
+        ctx.moveTo(-3, 0);
+        ctx.lineTo(0, -(r - 18));
+        ctx.lineTo(3, 0);
+        ctx.fillStyle = '#ff1744';
+        ctx.shadowColor = '#ff1744';
+        ctx.shadowBlur = 8;
+        ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
+      }
+
+      drawEnergyCores(ctx, cx, cy) {
+        ctx.save();
+        const spacing = 52;
+        const startX = cx - spacing;
+
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffb74d';
+        ctx.font = 'bold 12px "Chakra Petch", monospace';
+        ctx.fillText('ENERGY CORES (LIVES)', cx, cy - 24);
+
+        for (let i = 0; i < this.maxLives; i++) {
+          const vx = startX + i * spacing;
+          const isActive = i < this.lives;
+
+          ctx.beginPath();
+          ctx.arc(vx, cy, 15, 0, Math.PI * 2);
+          if (isActive) {
+            const grad = ctx.createRadialGradient(vx - 4, cy - 4, 1, vx, cy, 15);
+            grad.addColorStop(0, '#ffffff');
+            grad.addColorStop(0.4, '#00e5ff');
+            grad.addColorStop(1, '#005b82');
+            ctx.fillStyle = grad;
+            ctx.shadowColor = '#00e5ff';
+            ctx.shadowBlur = 14;
+          } else {
+            ctx.fillStyle = '#1c1424';
+            ctx.shadowBlur = 0;
+          }
+          ctx.fill();
+          ctx.strokeStyle = isActive ? '#b2ebf2' : '#392d44';
+          ctx.lineWidth = 2.2;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      }
+
+      drawStateOverlays(ctx, w, h) {
+        if (this.state === 'START') {
+          ctx.fillStyle = 'rgba(6, 3, 10, 0.86)';
+          ctx.fillRect(0, 0, w, h);
+
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ffd54f';
+          ctx.font = '900 60px "Orbitron", sans-serif';
+          ctx.shadowColor = '#ff6f00';
+          ctx.shadowBlur = 25;
+          ctx.fillText('CLOCKWORK OVERDRIVE', w / 2, h / 2 - 80);
+
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#00e5ff';
+          ctx.font = 'bold 22px "Chakra Petch", monospace';
+          ctx.fillText('DYNAMIC TEMPO RHYTHM PRECISION', w / 2, h / 2 - 25);
+
+          // 역대 최고 기록 표시
+          if (this.highScore > 0) {
+            ctx.fillStyle = '#ffd54f';
+            ctx.font = 'bold 18px "Orbitron", monospace';
+            ctx.fillText(`ALL-TIME BEST: ${this.highScore} PTS | MAX COMBO: ${this.highCombo} | PEAK: ${this.highBpm} BPM`, w / 2, h / 2 + 15);
+          }
+
+          const pulse = (Math.sin(performance.now() * 0.006) + 1) * 0.5;
+          ctx.fillStyle = `rgba(255, 238, 88, ${0.4 + pulse * 0.6})`;
+          ctx.font = '900 26px "Orbitron", monospace';
+          ctx.fillText('PRESS [SPACE] OR [CLICK] TO ENGAGE', w / 2, h / 2 + 75);
+
+          ctx.fillStyle = '#ffb74d';
+          ctx.font = '15px "Chakra Petch"';
+          ctx.fillText('Watch out for dynamic gear shifts every 8 combos!', w / 2, h / 2 + 120);
+        } else if (this.state === 'GAMEOVER') {
+          ctx.fillStyle = 'rgba(10, 2, 6, 0.9)';
+          ctx.fillRect(0, 0, w, h);
+
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ff1744';
+          ctx.font = '900 64px "Orbitron", sans-serif';
+          ctx.shadowColor = '#ff1744';
+          ctx.shadowBlur = 30;
+          ctx.fillText('CORE MELTDOWN', w / 2, h / 2 - 110);
+
+          ctx.shadowBlur = 0;
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 26px "Orbitron", monospace';
+          ctx.fillText(`FINAL SCORE: ${this.score}`, w / 2, h / 2 - 40);
+          ctx.fillStyle = '#ffb300';
+          ctx.fillText(`MAX COMBO: ${this.maxCombo}`, w / 2, h / 2 + 2);
+          ctx.fillStyle = '#00e5ff';
+          ctx.fillText(`PEAK SPEED: ${this.maxReachedBpm} BPM`, w / 2, h / 2 + 44);
+
+          // 역대 최고 점수 표시
+          ctx.fillStyle = '#ffd54f';
+          ctx.font = 'bold 18px "Orbitron", monospace';
+          ctx.fillText(`[ALL-TIME BEST: ${this.highScore} PTS | MAX COMBO: ${this.highCombo}]`, w / 2, h / 2 + 82);
+
+          const pulse = (Math.sin(performance.now() * 0.007) + 1) * 0.5;
+          ctx.fillStyle = `rgba(255, 215, 64, ${0.4 + pulse * 0.6})`;
+          ctx.font = '900 24px "Orbitron", monospace';
+          ctx.fillText('PRESS [SPACE] OR [CLICK] TO REBOOT', w / 2, h / 2 + 140);
+        } else if (this.state === 'PAUSED') {
+          ctx.fillStyle = 'rgba(4, 2, 8, 0.78)';
+          ctx.fillRect(0, 0, w, h);
+
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#ffd54f';
+          ctx.font = '900 48px "Orbitron", sans-serif';
+          ctx.fillText('SYSTEM PAUSED', w / 2, h / 2);
+          ctx.font = 'bold 20px "Chakra Petch"';
+          ctx.fillStyle = '#00e5ff';
+          ctx.fillText('PRESS [ESC] TO RESUME', w / 2, h / 2 + 45);
+        }
+      }
+
+      animate(now) {
+        if (!this.lastTime) this.lastTime = now;
+        const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+        this.lastTime = now;
+
+        this.update(dt, now);
+        this.draw();
+
+        requestAnimationFrame(this.animate);
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      new ClockworkGame();
+    });
+  </script>
+</body>
+</html>
