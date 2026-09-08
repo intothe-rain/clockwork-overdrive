@@ -1330,8 +1330,36 @@
         });
       }
 
+      openRankingModal() {
+        const modal = document.getElementById('modal-ranking');
+        if (modal.style.display === 'flex') {
+          modal.style.display = 'none';
+        } else {
+          this.renderRankingList();
+          modal.style.display = 'flex';
+        }
+      }
+
+      openSkinsModal() {
+        const modal = document.getElementById('modal-skins');
+        if (modal.style.display === 'flex') {
+          modal.style.display = 'none';
+        } else {
+          this.renderSkinsGrid();
+          modal.style.display = 'flex';
+        }
+      }
+
       initEvents() {
         window.addEventListener('keydown', (e) => {
+          if (e.code === 'KeyR') {
+            this.openRankingModal();
+            return;
+          }
+          if (e.code === 'KeyS') {
+            this.openSkinsModal();
+            return;
+          }
           if (e.code === 'Space') {
             e.preventDefault();
             if (!this.isKeyPressed) {
@@ -1339,7 +1367,14 @@
               this.handleActionInput();
             }
           } else if (e.code === 'Escape') {
-            this.togglePause();
+            const rModal = document.getElementById('modal-ranking');
+            const sModal = document.getElementById('modal-skins');
+            if (rModal.style.display === 'flex' || sModal.style.display === 'flex') {
+              rModal.style.display = 'none';
+              sModal.style.display = 'none';
+            } else {
+              this.togglePause();
+            }
           }
         });
 
@@ -1351,6 +1386,33 @@
 
         this.canvas.addEventListener('mousedown', (e) => {
           if (e.button === 0) {
+            const rect = this.canvas.getBoundingClientRect();
+            const scaleX = 1280 / rect.width;
+            const scaleY = 720 / rect.height;
+            const clickX = (e.clientX - rect.left) * scaleX;
+            const clickY = (e.clientY - rect.top) * scaleY;
+
+            // 상단 랭킹 아이콘 버튼 클릭 감지 (우측 상단 20, 20 부근)
+            if (clickX >= 1110 && clickX <= 1260 && clickY >= 14 && clickY <= 48) {
+              this.openRankingModal();
+              return;
+            }
+
+            // 시작 / 게임오버 화면 중앙 버튼 클릭 감지
+            if (this.state === 'START' || this.state === 'GAMEOVER') {
+              const by = this.state === 'START' ? (720 / 2 + 125) : (720 / 2 + 175);
+              // 랭킹 버튼 (x: 440 ~ 620)
+              if (clickX >= 440 && clickX <= 620 && clickY >= by && clickY <= by + 44) {
+                this.openRankingModal();
+                return;
+              }
+              // 스킨 버튼 (x: 660 ~ 840)
+              if (clickX >= 660 && clickX <= 840 && clickY >= by && clickY <= by + 44) {
+                this.openSkinsModal();
+                return;
+              }
+            }
+
             this.handleActionInput();
           }
         });
@@ -2055,6 +2117,24 @@
           ctx.fillText(`🔥 FEVER ${this.feverTimeLeft.toFixed(1)}s 🔥`, w / 2, 44);
         }
 
+        // 상단 우측 [ 🏆 RANKING (R) ] 항시 표시 배지
+        ctx.save();
+        ctx.fillStyle = 'rgba(35, 18, 48, 0.85)';
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 1.8;
+        ctx.shadowColor = '#ffaa00';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.roundRect(w - 170, 12, 150, 32, [6]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffe082';
+        ctx.font = 'bold 13px "Orbitron", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowBlur = 0;
+        ctx.fillText('🏆 RANKING (R)', w - 95, 33);
+        ctx.restore();
+
         // 콤보 팝
         if (this.combo > 0) {
           ctx.save();
@@ -2224,11 +2304,43 @@
           const pulse = (Math.sin(performance.now() * 0.006) + 1) * 0.5;
           ctx.fillStyle = `rgba(255, 238, 88, ${0.4 + pulse * 0.6})`;
           ctx.font = '900 26px "Orbitron", monospace';
-          ctx.fillText('PRESS [SPACE] OR [CLICK] TO ENGAGE', w / 2, h / 2 + 75);
+          ctx.fillText('PRESS [SPACE] TO ENGAGE THE GEAR', w / 2, h / 2 + 75);
+
+          // [🏆 랭킹 보기] 버튼 (START 화면)
+          const bStartY = h / 2 + 125;
+          ctx.save();
+          ctx.fillStyle = '#ffca28';
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#ffaa00';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.roundRect(440, bStartY, 180, 44, [8]);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#1a0e04';
+          ctx.font = '900 14px "Orbitron", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.shadowBlur = 0;
+          ctx.fillText('🏆 RANKING (R)', 530, bStartY + 27);
+
+          // [🎨 스킨 선택] 버튼 (START 화면)
+          ctx.fillStyle = '#00e5ff';
+          ctx.strokeStyle = '#fff';
+          ctx.shadowColor = '#00e5ff';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.roundRect(660, bStartY, 180, 44, [8]);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#051824';
+          ctx.shadowBlur = 0;
+          ctx.fillText('🎨 SKINS (S)', 750, bStartY + 27);
+          ctx.restore();
 
           ctx.fillStyle = '#ffb74d';
-          ctx.font = '15px "Chakra Petch"';
-          ctx.fillText('Dynamic Gear Shift & Steam Burst Fever & Workshop Skins', w / 2, h / 2 + 120);
+          ctx.font = '13px "Chakra Petch"';
+          ctx.fillText('CLICK BUTTONS OR PRESS [R] FOR RANKING • [S] FOR SKINS', w / 2, bStartY + 72);
         } else if (this.state === 'GAMEOVER') {
           ctx.fillStyle = 'rgba(10, 2, 6, 0.9)';
           ctx.fillRect(0, 0, w, h);
@@ -2255,8 +2367,40 @@
 
           const pulse = (Math.sin(performance.now() * 0.007) + 1) * 0.5;
           ctx.fillStyle = `rgba(255, 215, 64, ${0.4 + pulse * 0.6})`;
-          ctx.font = '900 24px "Orbitron", monospace';
-          ctx.fillText('PRESS [SPACE] OR [CLICK] TO REBOOT', w / 2, h / 2 + 140);
+          ctx.font = '900 22px "Orbitron", monospace';
+          ctx.fillText('PRESS [SPACE] TO REBOOT', w / 2, h / 2 + 135);
+
+          // [🏆 랭킹 보기] 버튼 (GAMEOVER 화면)
+          const bOverY = h / 2 + 175;
+          ctx.save();
+          ctx.fillStyle = '#ffca28';
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.shadowColor = '#ffaa00';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.roundRect(440, bOverY, 180, 44, [8]);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#1a0e04';
+          ctx.font = '900 14px "Orbitron", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.shadowBlur = 0;
+          ctx.fillText('🏆 RANKING (R)', 530, bOverY + 27);
+
+          // [🎨 스킨 선택] 버튼 (GAMEOVER 화면)
+          ctx.fillStyle = '#00e5ff';
+          ctx.strokeStyle = '#fff';
+          ctx.shadowColor = '#00e5ff';
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.roundRect(660, bOverY, 180, 44, [8]);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#051824';
+          ctx.shadowBlur = 0;
+          ctx.fillText('🎨 SKINS (S)', 750, bOverY + 27);
+          ctx.restore();
         } else if (this.state === 'PAUSED') {
           ctx.fillStyle = 'rgba(4, 2, 8, 0.78)';
           ctx.fillRect(0, 0, w, h);
