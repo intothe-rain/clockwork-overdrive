@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>클락워크 오버드라이브 (Clockwork Overdrive)</title>
   
   <!-- 메타 태그 및 Open Graph (웹 배포 최적화) -->
@@ -23,6 +23,8 @@
       box-sizing: border-box;
       user-select: none;
       -webkit-user-select: none;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -30,16 +32,18 @@
       color: #ffde8a;
       font-family: 'Chakra Petch', 'Orbitron', 'Segoe UI', sans-serif;
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     }
 
     #game-wrapper {
       position: relative;
-      width: min(96vw, calc(96vh * 16 / 9));
+      width: min(96vw, calc(94vh * 16 / 9), calc(94dvh * 16 / 9));
       aspect-ratio: 16 / 9;
       box-shadow: 0 0 70px rgba(255, 110, 0, 0.3), 0 0 120px rgba(0, 0, 0, 0.98);
       border: 5px solid #663d16;
@@ -64,6 +68,7 @@
       width: 100%;
       height: 100%;
       display: block;
+      touch-action: none;
     }
 
     .retro-vignette {
@@ -72,6 +77,58 @@
       box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.85);
       pointer-events: none;
       z-index: 11;
+    }
+
+    /* 📱 모바일 세로모드 회전 권장 오버레이 */
+    #rotate-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 4, 14, 0.97);
+      backdrop-filter: blur(10px);
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      color: #ffd700;
+    }
+
+    .rotate-phone-icon {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 20px;
+      animation: rotatePhone 2s infinite ease-in-out;
+    }
+
+    @keyframes rotatePhone {
+      0%, 15% { transform: rotate(0deg); }
+      50%, 75% { transform: rotate(-90deg); }
+      100% { transform: rotate(0deg); }
+    }
+
+    .rotate-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: #ffd54f;
+      text-shadow: 0 0 15px #ff8f00;
+      margin-bottom: 10px;
+    }
+
+    .rotate-desc {
+      font-size: 14px;
+      color: #b0bec5;
+      line-height: 1.6;
+    }
+
+    /* 세로 모드(Portrait) 감지 시 회전 안내 표시 */
+    @media screen and (orientation: portrait) and (max-width: 1024px) {
+      #rotate-overlay {
+        display: flex !important;
+      }
     }
 
     /* UI 오버레이 모달 스타일 */
@@ -86,7 +143,7 @@
       align-items: center;
       justify-content: center;
       color: #fff;
-      animation: fadeIn 0.25s ease-out;
+      animation: fadeIn 0.2s ease-out;
     }
 
     @keyframes fadeIn {
@@ -95,24 +152,26 @@
     }
 
     .modal-box {
-      width: 90%;
+      width: 92%;
       max-width: 680px;
+      max-height: 92%;
+      overflow-y: auto;
       background: linear-gradient(135deg, #1f1126 0%, #100816 100%);
       border: 3px solid #ffb300;
       border-radius: 12px;
       box-shadow: 0 0 35px rgba(255, 170, 0, 0.4), inset 0 0 20px rgba(0,0,0,0.8);
-      padding: 24px;
+      padding: 20px;
       text-align: center;
       position: relative;
     }
 
     .modal-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 28px;
+      font-size: 26px;
       font-weight: 900;
       color: #ffd54f;
       text-shadow: 0 0 15px #ff8f00;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       letter-spacing: 2px;
     }
 
@@ -120,21 +179,21 @@
     .ranking-table {
       width: 100%;
       border-collapse: collapse;
-      margin: 12px 0 20px 0;
+      margin: 10px 0 16px 0;
       font-family: 'Chakra Petch', monospace;
-      font-size: 15px;
+      font-size: 14px;
     }
 
     .ranking-table th {
       color: #00e5ff;
       border-bottom: 2px solid #4a2f18;
-      padding: 8px 6px;
+      padding: 6px 4px;
       text-align: center;
       font-weight: 700;
     }
 
     .ranking-table td {
-      padding: 7px 6px;
+      padding: 6px 4px;
       border-bottom: 1px solid rgba(255, 200, 100, 0.1);
       text-align: center;
     }
@@ -143,15 +202,15 @@
     .rank-silver { color: #e0e0e0; font-weight: 800; }
     .rank-bronze { color: #cd7f32; font-weight: 800; }
 
-    /* 모달 버튼 공통 */
+    /* 모달 버튼 */
     .btn-steampunk {
       background: linear-gradient(180deg, #ffca28 0%, #d48b1a 100%);
       border: 2px solid #fff;
       color: #1a0e04;
       font-family: 'Orbitron', sans-serif;
       font-weight: 900;
-      font-size: 15px;
-      padding: 10px 24px;
+      font-size: 14px;
+      padding: 8px 20px;
       border-radius: 6px;
       cursor: pointer;
       text-shadow: 0 1px 0 rgba(255,255,255,0.4);
@@ -176,7 +235,7 @@
       border: 1px solid #78909c;
       color: #eceff1;
       box-shadow: 0 4px 0 #111;
-      margin-left: 10px;
+      margin-left: 8px;
     }
 
     /* 닉네임 입력 폼 */
@@ -186,15 +245,15 @@
       border-radius: 6px;
       color: #00ffff;
       font-family: 'Orbitron', monospace;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 900;
-      padding: 10px 16px;
-      width: 240px;
+      padding: 8px 14px;
+      width: 220px;
       text-align: center;
       letter-spacing: 3px;
       box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
       outline: none;
-      margin: 16px 0 22px 0;
+      margin: 12px 0 18px 0;
       text-transform: uppercase;
     }
 
@@ -202,15 +261,15 @@
     .skins-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 14px;
-      margin: 20px 0;
+      gap: 12px;
+      margin: 16px 0;
     }
 
     .skin-card {
       background: rgba(20, 10, 26, 0.7);
       border: 2px solid #4a3422;
       border-radius: 8px;
-      padding: 14px 10px;
+      padding: 12px 8px;
       cursor: pointer;
       transition: all 0.2s;
     }
@@ -230,18 +289,18 @@
     .skin-name {
       font-family: 'Orbitron', sans-serif;
       font-weight: 900;
-      font-size: 14px;
-      margin-top: 8px;
+      font-size: 13px;
+      margin-top: 6px;
     }
 
     .skin-desc {
-      font-size: 11px;
+      font-size: 10px;
       color: #b0bec5;
-      margin-top: 4px;
+      margin-top: 3px;
     }
 
     .controls-hint {
-      margin-top: 14px;
+      margin-top: 10px;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 1.5px;
@@ -249,8 +308,10 @@
       text-transform: uppercase;
       text-shadow: 0 0 10px rgba(255, 180, 0, 0.6);
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 10px;
+      justify-content: center;
+      gap: 8px;
     }
 
     .key-badge {
@@ -271,9 +332,56 @@
       border-color: #ffd54f;
       color: #fff;
     }
+
+    /* 📱 모바일 가로모드 (화면 높이가 낮을 때) 최적화 */
+    @media screen and (max-height: 520px) {
+      #game-wrapper {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+        border-radius: 0;
+        border: none;
+      }
+      .controls-hint {
+        display: none !important;
+      }
+      .modal-box {
+        padding: 12px 16px;
+      }
+      .modal-title {
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+      .ranking-table th, .ranking-table td {
+        padding: 3px 2px;
+        font-size: 12px;
+      }
+      .skins-grid {
+        gap: 8px;
+        margin: 10px 0;
+      }
+      .skin-card {
+        padding: 8px 4px;
+      }
+    }
   </style>
 </head>
 <body>
+
+  <!-- 📱 모바일 세로 모드 회전 안내 화면 -->
+  <div id="rotate-overlay">
+    <svg class="rotate-phone-icon" viewBox="0 0 24 24" fill="none" stroke="#ffd700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+      <path d="M12 18h.01"/>
+      <path d="M19 12a7 7 0 0 0-7-7"/>
+      <polyline points="12 1 12 5 16 5"/>
+    </svg>
+    <div class="rotate-title">ROTATE YOUR DEVICE</div>
+    <div class="rotate-desc">
+      클락워크 오버드라이브는 가로 화면에 최적화되어 있습니다.<br>
+      스마트폰을 <strong>가로(Landscape)</strong>로 돌려주세요!
+    </div>
+  </div>
 
   <div id="game-wrapper">
     <canvas id="gameCanvas" width="1280" height="720"></canvas>
@@ -306,8 +414,8 @@
     <div id="modal-newrecord" class="ui-modal">
       <div class="modal-box">
         <h2 class="modal-title" style="color:#00e5ff; text-shadow:0 0 18px #00e5ff;">⚡ NEW HIGH SCORE! ⚡</h2>
-        <p style="font-size:16px; color:#ffdf88;" id="record-summary-text">SCORE: 00000 | COMBO: 00</p>
-        <div style="margin-top:14px;">ENTER YOUR CALLSIGN:</div>
+        <p style="font-size:15px; color:#ffdf88;" id="record-summary-text">SCORE: 00000 | COMBO: 00</p>
+        <div style="margin-top:10px; font-size:13px;">ENTER YOUR CALLSIGN:</div>
         <input type="text" id="input-callsign" class="callsign-input" maxlength="10" placeholder="PILOT" autofocus>
         <div>
           <button class="btn-steampunk" id="btn-submit-record">SAVE RECORD</button>
@@ -329,21 +437,31 @@
   </div>
 
   <div class="controls-hint">
-    <span class="key-badge">SPACE</span> or <span class="key-badge">CLICK</span> LOCK ON BEAT &bull; 
+    <span class="key-badge" id="hint-input">SPACE or TAP</span> LOCK ON BEAT &bull; 
     <span class="key-badge action-badge-btn" id="hud-btn-ranking">🏆 RANKING</span> &bull; 
     <span class="key-badge action-badge-btn" id="hud-btn-skins">🎨 SKINS</span> &bull; 
-    <span class="key-badge">ESC</span> PAUSE
+    <span class="key-badge action-badge-btn" id="hud-btn-fullscreen">⛶ FULLSCREEN</span>
   </div>
 
   <script>
     /* ==========================================================================
        클락워크 오버드라이브 (Clockwork Overdrive)
+       - 모바일 최적화: 가로모드 강제 오버레이, 전면 터치(Tap) 타격, 햅틱 진동 피드백
        - 명예의 전당 (Top 10 랭킹 시스템 & 닉네임 등록)
        - 오버드라이브 피버 모드 (Steam Burst Fever: 2x Score & Gold Overheat)
        - 워크샵 스킨 해금 시스템 (Brass / Cyber Neon / Void Overlord)
-       - 반응형 오디오 비주얼라이저 (VU Meter VU 게이지)
+       - 반응형 오디오 비주얼라이저 (VU Meter)
        - 실시간 다이내믹 랜덤 BPM 변속 & 4코드 폴리포닉 BGM
        ========================================================================== */
+
+    const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || window.innerWidth < 900;
+
+    // 모바일 햅틱 진동 유틸리티
+    function triggerHaptic(pattern) {
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(pattern); } catch(e) {}
+      }
+    }
 
     // --- [1. 스킨 정의 (Workshop Skins)] ---
     const SKINS = [
@@ -379,7 +497,7 @@
       }
     ];
 
-    // --- [2. Web Audio API 엔진 (반응형 비주얼라이저 레벨 연동)] ---
+    // --- [2. Web Audio API 엔진] ---
     class AudioEngine {
       constructor() {
         this.ctx = null;
@@ -395,7 +513,6 @@
         this.scheduleAheadTime = 0.12;
         this.timerId = null;
 
-        // 비주얼라이저용 실시간 오디오 레벨 버퍼 (0.0 ~ 1.0)
         this.vuLevels = [0, 0, 0, 0, 0, 0, 0, 0];
 
         this.chordProgression = [
@@ -973,7 +1090,7 @@
       }
     }
 
-    // --- [4. 보석 기어 렌더링 헬퍼] ---
+    // --- [4. 보석 기어 렌더링] ---
     const GEAR_THEMES = [
       { name: 'ruby', mainColor: '#ff2d55', lightColor: '#ff85a1', darkColor: '#6a001a', rimGlow: '#ff003c' },
       { name: 'gold', mainColor: '#ffb300', lightColor: '#ffe57f', darkColor: '#7c4300', rimGlow: '#ffaa00' },
@@ -1142,17 +1259,14 @@
         this.totalAccumScore = parseInt(localStorage.getItem('cw_accum_score') || '0', 10);
         this.currentSkinId = localStorage.getItem('cw_selected_skin') || 'brass';
 
-        // 랭킹 데이터 로드
         this.leaderboard = this.loadLeaderboard();
 
-        // BPM 시스템
         this.baseBpm = 96;
         this.currentBpm = 96;
         this.maxReachedBpm = 96;
         this.lastShiftCombo = 0;
         this.randomBpmPool = [86, 96, 108, 120, 132, 142];
 
-        // 피버 모드 (Steam Burst Fever)
         this.feverActive = false;
         this.feverTimeLeft = 0;
         this.feverMaxTime = 6.0;
@@ -1191,6 +1305,12 @@
         this.initModals();
         this.animate = this.animate.bind(this);
         requestAnimationFrame(this.animate);
+
+        // 모바일일 경우 힌트 텍스트 전환
+        if (isMobile) {
+          const hint = document.getElementById('hint-input');
+          if (hint) hint.innerText = 'TAP SCREEN';
+        }
       }
 
       getCurrentSkin() {
@@ -1202,7 +1322,6 @@
         if (saved) {
           try { return JSON.parse(saved); } catch(e) {}
         }
-        // 기본 스팀펑크 레전드 랭커 데이터
         return [
           { name: 'TESLA', score: 32500, combo: 58, bpm: 142, date: '1891-07-10' },
           { name: 'LOVELACE', score: 26800, combo: 46, bpm: 132, date: '1843-12-15' },
@@ -1237,7 +1356,6 @@
       }
 
       initModals() {
-        // 1. 랭킹 모달 이벤트
         const rankingModal = document.getElementById('modal-ranking');
         const rankingBtn = document.getElementById('hud-btn-ranking');
         const closeRankingBtn = document.getElementById('btn-close-ranking');
@@ -1248,37 +1366,53 @@
         };
         const closeRanking = () => { rankingModal.style.display = 'none'; };
 
-        rankingBtn.addEventListener('click', openRanking);
-        closeRankingBtn.addEventListener('click', closeRanking);
+        if (rankingBtn) rankingBtn.addEventListener('click', openRanking);
+        if (closeRankingBtn) closeRankingBtn.addEventListener('click', closeRanking);
 
-        // 2. 신기록 닉네임 입력 모달
         const recordModal = document.getElementById('modal-newrecord');
         const submitRecordBtn = document.getElementById('btn-submit-record');
         const skipRecordBtn = document.getElementById('btn-skip-record');
         const inputCallsign = document.getElementById('input-callsign');
 
-        submitRecordBtn.addEventListener('click', () => {
-          const name = inputCallsign.value.trim() || 'PILOT';
-          localStorage.setItem('cw_last_callsign', name);
-          this.addLeaderboardRecord(name, this.score, this.maxCombo, this.maxReachedBpm);
-          recordModal.style.display = 'none';
-          openRanking();
-        });
+        if (submitRecordBtn) {
+          submitRecordBtn.addEventListener('click', () => {
+            const name = inputCallsign.value.trim() || 'PILOT';
+            localStorage.setItem('cw_last_callsign', name);
+            this.addLeaderboardRecord(name, this.score, this.maxCombo, this.maxReachedBpm);
+            recordModal.style.display = 'none';
+            openRanking();
+          });
+        }
 
-        skipRecordBtn.addEventListener('click', () => {
-          recordModal.style.display = 'none';
-        });
+        if (skipRecordBtn) {
+          skipRecordBtn.addEventListener('click', () => {
+            recordModal.style.display = 'none';
+          });
+        }
 
-        // 3. 스킨 모달 이벤트
         const skinsModal = document.getElementById('modal-skins');
         const skinsBtn = document.getElementById('hud-btn-skins');
         const closeSkinsBtn = document.getElementById('btn-close-skins');
 
-        skinsBtn.addEventListener('click', () => {
-          this.renderSkinsGrid();
-          skinsModal.style.display = 'flex';
-        });
-        closeSkinsBtn.addEventListener('click', () => { skinsModal.style.display = 'none'; });
+        if (skinsBtn) {
+          skinsBtn.addEventListener('click', () => {
+            this.renderSkinsGrid();
+            skinsModal.style.display = 'flex';
+          });
+        }
+        if (closeSkinsBtn) closeSkinsBtn.addEventListener('click', () => { skinsModal.style.display = 'none'; });
+
+        // 풀스크린 토글
+        const fsBtn = document.getElementById('hud-btn-fullscreen');
+        if (fsBtn) {
+          fsBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+              document.exitFullscreen().catch(() => {});
+            }
+          });
+        }
       }
 
       renderRankingList() {
@@ -1314,7 +1448,7 @@
           const card = document.createElement('div');
           card.className = `skin-card ${isSelected ? 'selected' : ''} ${!isUnlocked ? 'locked' : ''}`;
           card.innerHTML = `
-            <div style="font-size:24px;">${skin.id === 'brass' ? '⚙️' : (skin.id === 'cyber' ? '⚡' : '🌌')}</div>
+            <div style="font-size:22px;">${skin.id === 'brass' ? '⚙️' : (skin.id === 'cyber' ? '⚡' : '🌌')}</div>
             <div class="skin-name" style="color:${skin.coreColor};">${skin.name}</div>
             <div class="skin-desc">${isUnlocked ? skin.desc : `🔒 UNLOCK AT ${skin.unlockScore.toLocaleString()} PTS`}</div>
           `;
@@ -1351,6 +1485,7 @@
       }
 
       initEvents() {
+        // 1. 키보드 이벤트
         window.addEventListener('keydown', (e) => {
           if (e.code === 'KeyR') {
             this.openRankingModal();
@@ -1384,42 +1519,56 @@
           }
         });
 
-        this.canvas.addEventListener('mousedown', (e) => {
-          if (e.button === 0) {
-            const rect = this.canvas.getBoundingClientRect();
-            const scaleX = 1280 / rect.width;
-            const scaleY = 720 / rect.height;
-            const clickX = (e.clientX - rect.left) * scaleX;
-            const clickY = (e.clientY - rect.top) * scaleY;
+        // 2. 통합 포인터 & 터치 타격 핸들러 (모바일 지연 0ms)
+        const handleInteraction = (clientX, clientY) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const scaleX = 1280 / rect.width;
+          const scaleY = 720 / rect.height;
+          const clickX = (clientX - rect.left) * scaleX;
+          const clickY = (clientY - rect.top) * scaleY;
 
-            // 상단 랭킹 아이콘 버튼 클릭 감지 (우측 상단 20, 20 부근)
-            if (clickX >= 1110 && clickX <= 1260 && clickY >= 14 && clickY <= 48) {
+          // 우측 상단 랭킹 아이콘 버튼
+          if (clickX >= 1110 && clickX <= 1260 && clickY >= 12 && clickY <= 48) {
+            this.openRankingModal();
+            return;
+          }
+
+          // 시작 / 게임오버 화면 중앙 버튼
+          if (this.state === 'START' || this.state === 'GAMEOVER') {
+            const by = this.state === 'START' ? (720 / 2 + 125) : (720 / 2 + 175);
+            // 랭킹 버튼 (x: 440 ~ 620)
+            if (clickX >= 440 && clickX <= 620 && clickY >= by && clickY <= by + 44) {
               this.openRankingModal();
               return;
             }
-
-            // 시작 / 게임오버 화면 중앙 버튼 클릭 감지
-            if (this.state === 'START' || this.state === 'GAMEOVER') {
-              const by = this.state === 'START' ? (720 / 2 + 125) : (720 / 2 + 175);
-              // 랭킹 버튼 (x: 440 ~ 620)
-              if (clickX >= 440 && clickX <= 620 && clickY >= by && clickY <= by + 44) {
-                this.openRankingModal();
-                return;
-              }
-              // 스킨 버튼 (x: 660 ~ 840)
-              if (clickX >= 660 && clickX <= 840 && clickY >= by && clickY <= by + 44) {
-                this.openSkinsModal();
-                return;
-              }
+            // 스킨 버튼 (x: 660 ~ 840)
+            if (clickX >= 660 && clickX <= 840 && clickY >= by && clickY <= by + 44) {
+              this.openSkinsModal();
+              return;
             }
+          }
 
-            this.handleActionInput();
+          this.handleActionInput();
+        };
+
+        // 마우스 클릭
+        this.canvas.addEventListener('mousedown', (e) => {
+          if (e.button === 0) {
+            handleInteraction(e.clientX, e.clientY);
           }
         });
+
+        // 📱 모바일 터치 이벤트 (원터치 즉각 반응)
+        this.canvas.addEventListener('touchstart', (e) => {
+          e.preventDefault();
+          if (e.touches.length > 0) {
+            const touch = e.touches[0];
+            handleInteraction(touch.clientX, touch.clientY);
+          }
+        }, { passive: false });
       }
 
       handleActionInput() {
-        // 모달이 열려있으면 캔버스 입력 차단
         if (document.getElementById('modal-ranking').style.display === 'flex' ||
             document.getElementById('modal-newrecord').style.display === 'flex' ||
             document.getElementById('modal-skins').style.display === 'flex') {
@@ -1487,11 +1636,11 @@
         this.missFlashAlpha = 0;
       }
 
-      // --- [피버 모드 트리거 (Steam Burst Fever)] ---
       triggerFeverMode() {
         this.feverActive = true;
         this.feverTimeLeft = this.feverMaxTime;
         this.audio.playSteamBlast();
+        triggerHaptic([60, 40, 80]); // 피버 햅틱
         this.triggerShake(16, 0.4);
         this.spawnSteamBurst(this.mainGear.x, this.mainGear.y, 40);
         this.shockwaves.push(new ShockwaveRing(this.mainGear.x, this.mainGear.y, '#ffd700', 360, 0.6));
@@ -1516,6 +1665,7 @@
 
           this.audio.setBpm(this.currentBpm);
           this.audio.playGearShiftSound(isSpeedUp);
+          triggerHaptic([40, 30, 60]); // 템포 시프트 햅틱
 
           this.triggerShake(14, 0.35);
           this.spawnSteamBurst(this.mainGear.x, this.mainGear.y, 35);
@@ -1562,13 +1712,14 @@
             this.mainGear.impactPulse = 1.0;
             this.comboPopScale = 1.45;
 
+            triggerHaptic(25); // 퍼펙트 햅틱 진동
+
             this.audio.playMetalClank(true, skin.soundPitch);
             this.audio.playSteamBlast();
             this.triggerShake(8, 0.22);
             this.spawnHitEffects(closestNote, true);
             this.showJudgeFeedback(this.feverActive ? 'PERFECT x2!!' : 'PERFECT!!', '#ffd700');
 
-            // 압력 MAX 도달 시 피버 모드 자동 발동
             if (!this.feverActive && this.overdriveLevel >= 0.95 && this.combo >= 15) {
               this.triggerFeverMode();
             }
@@ -1582,6 +1733,8 @@
             this.score += (150 + this.combo * 12) * scoreMultiplier;
             this.mainGear.impactPulse = 0.5;
             this.comboPopScale = 1.25;
+
+            triggerHaptic(15); // 굿 햅틱 진동
 
             this.audio.playMetalClank(false, skin.soundPitch);
             this.triggerShake(4, 0.12);
@@ -1605,8 +1758,11 @@
         if (note) note.missed = true;
         this.combo = 0;
         this.lastShiftCombo = 0;
-        this.feverActive = false; // 미스 시 피버 해제
+        this.feverActive = false;
         this.lives--;
+
+        triggerHaptic([40, 30, 40]); // 미스 피격 햅틱 진동
+
         this.audio.playMissScreech();
         this.missFlashAlpha = 0.7;
         this.triggerShake(14, 0.35);
@@ -1629,14 +1785,13 @@
         this.state = 'GAMEOVER';
         this.audio.stopBgm();
         this.audio.playCatastrophicFailure();
+        triggerHaptic([100, 50, 150]); // 게임오버 햅틱
         this.triggerShake(26, 0.9);
         this.missFlashAlpha = 0.95;
 
-        // 누적 점수 업데이트 (스킨 해금 조건용)
         this.totalAccumScore += this.score;
         localStorage.setItem('cw_accum_score', String(this.totalAccumScore));
 
-        // 최고 기록 영구 갱신
         if (this.score > this.highScore) {
           this.highScore = this.score;
           localStorage.setItem('cw_high_score', String(this.highScore));
@@ -1650,15 +1805,14 @@
           localStorage.setItem('cw_high_bpm', String(this.highBpm));
         }
 
-        // 랭킹 등록 대상 확인 및 모달 호출
         if (this.checkRankEligible(this.score)) {
           setTimeout(() => {
             const modal = document.getElementById('modal-newrecord');
             const summary = document.getElementById('record-summary-text');
             const input = document.getElementById('input-callsign');
-            summary.innerText = `SCORE: ${this.score.toLocaleString()} | MAX COMBO: ${this.maxCombo} | BPM: ${this.maxReachedBpm}`;
-            input.value = localStorage.getItem('cw_last_callsign') || '';
-            modal.style.display = 'flex';
+            if (summary) summary.innerText = `SCORE: ${this.score.toLocaleString()} | MAX COMBO: ${this.maxCombo} | BPM: ${this.maxReachedBpm}`;
+            if (input) input.value = localStorage.getItem('cw_last_callsign') || '';
+            if (modal) modal.style.display = 'flex';
           }, 600);
         }
 
@@ -1743,16 +1897,14 @@
           this.comboPopScale += (1.0 - this.comboPopScale) * dt * 9.0;
         }
 
-        // 피버 모드 타이머 감쇠
         if (this.feverActive) {
           this.feverTimeLeft -= dt;
           if (this.feverTimeLeft <= 0) {
             this.feverActive = false;
-            this.overdriveLevel = 0.5; // 피버 종료 후 절반으로 안정화
+            this.overdriveLevel = 0.5;
           }
         }
 
-        // 오디오 비주얼라이저 레벨 감쇠
         this.audio.updateVisualizer(dt);
 
         const beatInterval = 60000 / this.currentBpm;
@@ -1792,7 +1944,6 @@
 
           const angleIndex = (this.beatIndex * 3 + Math.floor(Math.random() * 3)) % 8;
           const trajectoryType = trajectories[this.beatIndex % trajectories.length];
-          // 피버 모드일 때는 모든 기어가 황금 보석 기어로 변신!
           const themeIndex = this.feverActive ? 1 : (this.beatIndex % GEAR_THEMES.length);
 
           this.noteQueue.push(new ApproachGearNote(this.noteIdCounter++, targetTime, trajectoryType, angleIndex, spawnTime, themeIndex));
@@ -1820,7 +1971,6 @@
         }
       }
 
-      // --- [7. Canvas 렌더링 & 오디오 비주얼라이저] ---
       draw() {
         const ctx = this.ctx;
         const width = 1280;
@@ -1836,10 +1986,7 @@
         }
 
         this.drawBackground(ctx, width, height);
-
-        // 반응형 오디오 비주얼라이저 (VU Meter 바)
         this.drawAudioVisualizer(ctx, width, height);
-
         this.drawOrbitTracks(ctx);
         this.drawApproachGears(ctx);
         this.drawMainCore(ctx);
@@ -1854,7 +2001,6 @@
 
         this.drawArcadeHUD(ctx, width, height);
 
-        // 피버 모드 황금 발광 테두리
         if (this.feverActive) {
           ctx.save();
           ctx.strokeStyle = '#ffd700';
@@ -1929,7 +2075,6 @@
         ctx.stroke();
       }
 
-      // [기능 4: 반응형 오디오 비주얼라이저 (VU Meter 바)]
       drawAudioVisualizer(ctx, w, h) {
         ctx.save();
         const bars = this.audio.vuLevels;
@@ -1937,12 +2082,10 @@
         const maxBarHeight = 110;
         const spacing = 12;
 
-        // 좌측 및 우측 대칭 VU 미터
         for (let i = 0; i < bars.length; i++) {
           const level = bars[i];
           const barH = level * maxBarHeight;
 
-          // 좌측 바
           const lx = 25 + i * spacing;
           const ly = h - 60;
           ctx.fillStyle = this.feverActive ? '#ffd700' : (level > 0.8 ? '#ff1744' : '#00e5ff');
@@ -1950,7 +2093,6 @@
           ctx.shadowBlur = 8;
           ctx.fillRect(lx, ly - barH, barWidth, barH);
 
-          // 우측 바
           const rx = w - 25 - (bars.length - 1 - i) * spacing;
           ctx.fillRect(rx, ly - barH, barWidth, barH);
         }
@@ -2052,10 +2194,8 @@
         ctx.scale(bounceScale, bounceScale);
         ctx.translate(-mg.x, -mg.y);
 
-        // 스킨 기반 코어 렌더링
         drawCasualGear(ctx, mg.x, mg.y, mg.radius, mg.teeth, mg.rotation, this.feverActive ? 1 : skin.themeIndex, true);
 
-        // 오버드라이브 / 피버 전자기 방전
         if (this.overdriveLevel > 0.4 || this.feverActive) {
           const sparkCount = Math.floor((this.overdriveLevel + (this.feverActive ? 0.8 : 0)) * 5);
           ctx.strokeStyle = this.feverActive ? '#ffd700' : skin.coreColor;
@@ -2117,7 +2257,7 @@
           ctx.fillText(`🔥 FEVER ${this.feverTimeLeft.toFixed(1)}s 🔥`, w / 2, 44);
         }
 
-        // 상단 우측 [ 🏆 RANKING (R) ] 항시 표시 배지
+        // 상단 우측 [ 🏆 RANKING (R) ] 배지 버튼
         ctx.save();
         ctx.fillStyle = 'rgba(35, 18, 48, 0.85)';
         ctx.strokeStyle = '#ffd700';
@@ -2164,7 +2304,7 @@
           ctx.restore();
         }
 
-        // 템포 / 피버 알림 배너
+        // 템포 / 피버 배너
         if (this.tempoPopup.alpha > 0) {
           ctx.save();
           ctx.translate(w / 2, 185);
@@ -2304,9 +2444,9 @@
           const pulse = (Math.sin(performance.now() * 0.006) + 1) * 0.5;
           ctx.fillStyle = `rgba(255, 238, 88, ${0.4 + pulse * 0.6})`;
           ctx.font = '900 26px "Orbitron", monospace';
-          ctx.fillText('PRESS [SPACE] TO ENGAGE THE GEAR', w / 2, h / 2 + 75);
+          ctx.fillText(isMobile ? 'TAP SCREEN TO ENGAGE THE GEAR' : 'PRESS [SPACE] TO ENGAGE THE GEAR', w / 2, h / 2 + 75);
 
-          // [🏆 랭킹 보기] 버튼 (START 화면)
+          // [🏆 랭킹 보기] 버튼
           const bStartY = h / 2 + 125;
           ctx.save();
           ctx.fillStyle = '#ffca28';
@@ -2324,7 +2464,7 @@
           ctx.shadowBlur = 0;
           ctx.fillText('🏆 RANKING (R)', 530, bStartY + 27);
 
-          // [🎨 스킨 선택] 버튼 (START 화면)
+          // [🎨 스킨 선택] 버튼
           ctx.fillStyle = '#00e5ff';
           ctx.strokeStyle = '#fff';
           ctx.shadowColor = '#00e5ff';
@@ -2340,7 +2480,7 @@
 
           ctx.fillStyle = '#ffb74d';
           ctx.font = '13px "Chakra Petch"';
-          ctx.fillText('CLICK BUTTONS OR PRESS [R] FOR RANKING • [S] FOR SKINS', w / 2, bStartY + 72);
+          ctx.fillText(isMobile ? 'TAP BUTTONS FOR RANKING & SKINS' : 'CLICK BUTTONS OR PRESS [R] FOR RANKING • [S] FOR SKINS', w / 2, bStartY + 72);
         } else if (this.state === 'GAMEOVER') {
           ctx.fillStyle = 'rgba(10, 2, 6, 0.9)';
           ctx.fillRect(0, 0, w, h);
@@ -2368,9 +2508,8 @@
           const pulse = (Math.sin(performance.now() * 0.007) + 1) * 0.5;
           ctx.fillStyle = `rgba(255, 215, 64, ${0.4 + pulse * 0.6})`;
           ctx.font = '900 22px "Orbitron", monospace';
-          ctx.fillText('PRESS [SPACE] TO REBOOT', w / 2, h / 2 + 135);
+          ctx.fillText(isMobile ? 'TAP SCREEN TO REBOOT' : 'PRESS [SPACE] TO REBOOT', w / 2, h / 2 + 135);
 
-          // [🏆 랭킹 보기] 버튼 (GAMEOVER 화면)
           const bOverY = h / 2 + 175;
           ctx.save();
           ctx.fillStyle = '#ffca28';
@@ -2388,7 +2527,6 @@
           ctx.shadowBlur = 0;
           ctx.fillText('🏆 RANKING (R)', 530, bOverY + 27);
 
-          // [🎨 스킨 선택] 버튼 (GAMEOVER 화면)
           ctx.fillStyle = '#00e5ff';
           ctx.strokeStyle = '#fff';
           ctx.shadowColor = '#00e5ff';
@@ -2411,7 +2549,7 @@
           ctx.fillText('SYSTEM PAUSED', w / 2, h / 2);
           ctx.font = 'bold 20px "Chakra Petch"';
           ctx.fillStyle = '#00e5ff';
-          ctx.fillText('PRESS [ESC] TO RESUME', w / 2, h / 2 + 45);
+          ctx.fillText(isMobile ? 'TAP TO RESUME' : 'PRESS [ESC] TO RESUME', w / 2, h / 2 + 45);
         }
       }
 
