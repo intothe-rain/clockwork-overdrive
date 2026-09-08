@@ -35,6 +35,13 @@
     "date": "1891-07-10"
   },
   {
+    "name": "QWER",
+    "score": 28837,
+    "combo": 30,
+    "bpm": 148,
+    "date": "2026-09-08"
+  },
+  {
     "name": "LOVELACE",
     "score": 26800,
     "combo": 46,
@@ -60,13 +67,6 @@
     "score": 13892,
     "combo": 21,
     "bpm": 132,
-    "date": "2026-09-08"
-  },
-  {
-    "name": "PILOT",
-    "score": 13027,
-    "combo": 20,
-    "bpm": 142,
     "date": "2026-09-08"
   }
 ]
