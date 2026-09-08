@@ -1459,14 +1459,22 @@
       loadLeaderboard() {
         const saved = localStorage.getItem('cw_leaderboard');
         if (saved) {
-          try { return JSON.parse(saved); } catch(e) {}
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length >= 10) return parsed;
+          } catch(e) {}
         }
         return [
           { name: 'TESLA', score: 32500, combo: 58, bpm: 142, date: '1891-07-10' },
           { name: 'LOVELACE', score: 26800, combo: 46, bpm: 132, date: '1843-12-15' },
           { name: 'WATT', score: 21400, combo: 38, bpm: 120, date: '1776-03-08' },
           { name: 'VERNE', score: 17200, combo: 30, bpm: 108, date: '1870-06-20' },
-          { name: 'EDISON', score: 12900, combo: 24, bpm: 96, date: '1879-10-22' }
+          { name: 'EDISON', score: 12900, combo: 24, bpm: 96, date: '1879-10-22' },
+          { name: 'FARADAY', score: 10500, combo: 20, bpm: 96, date: '1831-08-29' },
+          { name: 'BELL', score: 8800, combo: 18, bpm: 86, date: '1876-03-10' },
+          { name: 'CURIE', score: 7200, combo: 15, bpm: 86, date: '1898-12-26' },
+          { name: 'NEWTON', score: 5800, combo: 12, bpm: 86, date: '1687-07-05' },
+          { name: 'NOBEL', score: 4500, combo: 10, bpm: 86, date: '1867-10-19' }
         ];
       }
 
@@ -1475,11 +1483,14 @@
       }
 
       checkRankEligible(score) {
-        const targetList = (this.globalLeaderboard && this.globalLeaderboard.length > 0)
+        if (!score || score <= 0) return false;
+        const targetList = (this.globalLeaderboard && this.globalLeaderboard.length >= 10)
           ? this.globalLeaderboard
-          : this.leaderboard;
-        if (targetList.length < 10) return true;
-        return score > targetList[targetList.length - 1].score;
+          : (this.leaderboard && this.leaderboard.length >= 10 ? this.leaderboard : this.loadLeaderboard());
+
+        // 10위 기록보다 높은 점수일 때만 10위권 진입으로 판정
+        const cutoffScore = targetList[Math.min(targetList.length - 1, 9)].score;
+        return score > cutoffScore;
       }
 
       async addLeaderboardRecord(name, score, combo, bpm) {

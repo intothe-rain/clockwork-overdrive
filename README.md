@@ -11,6 +11,8 @@
 
 1. **실행**: `index.html` 파일을 웹 브라우저(PC / 스마트폰 모바일 브라우저)로 열어 실행합니다.  
    - **온라인 라이브 플레이**: [GitHub Pages 바로가기](https://intothe-rain.github.io/clockwork-overdrive/)
+   - **모바일 접속 QR 코드**: 스마트폰 카메라로 아래 QR 코드를 비추면 즉시 게임에 접속할 수 있습니다.  
+     <img src="./qrcode.png" width="180" alt="Clockwork Overdrive QR Code" />
 2. **조작법**:
    - **타이밍 타격**:
      - **PC**: `Space` 키 또는 `마우스 좌클릭`
