@@ -1,0 +1,37 @@
+[
+  {
+    "name": "TESLA",
+    "score": 32500,
+    "combo": 58,
+    "bpm": 142,
+    "date": "1891-07-10"
+  },
+  {
+    "name": "LOVELACE",
+    "score": 26800,
+    "combo": 46,
+    "bpm": 132,
+    "date": "1843-12-15"
+  },
+  {
+    "name": "WATT",
+    "score": 21400,
+    "combo": 38,
+    "bpm": 120,
+    "date": "1776-03-08"
+  },
+  {
+    "name": "VERNE",
+    "score": 17200,
+    "combo": 30,
+    "bpm": 108,
+    "date": "1870-06-20"
+  },
+  {
+    "name": "EDISON",
+    "score": 12900,
+    "combo": 24,
+    "bpm": 96,
+    "date": "1879-10-22"
+  }
+]
