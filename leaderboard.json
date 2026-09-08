@@ -8,6 +8,13 @@
   },
   {
     "name": "RERERE",
+    "score": 545259,
+    "combo": 131,
+    "bpm": 142,
+    "date": "2026-09-08"
+  },
+  {
+    "name": "RERERE",
     "score": 472673,
     "combo": 140,
     "bpm": 148,
@@ -60,13 +67,6 @@
     "score": 200456,
     "combo": 69,
     "bpm": 148,
-    "date": "2026-09-08"
-  },
-  {
-    "name": "RERERE",
-    "score": 195920,
-    "combo": 87,
-    "bpm": 142,
     "date": "2026-09-08"
   }
 ]
